@@ -1,21 +1,24 @@
 {
   "name": "ytp-debugger",
-  "displayName": "ytp-debugger",
-  "description": "a visualize debugger",
-  "version": "0.0.1",
+  "displayName": "YTP Debugger Variable Visualizer",
+  "description": "Fetch and print debug variables from C++ programs for competitive programming",
+  "version": "0.1.0",
+  "publisher": "ytp",
   "engines": {
-    "vscode": "^1.105.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Debuggers"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onDebug"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ytp-debugger.helloWorld",
-        "title": "Hello World"
+        "command": "ytp.printDebugVariables",
+        "title": "YTP: Print Debug Variables"
       }
     ]
   },
@@ -23,18 +26,14 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/vscode": "^1.105.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "typescript-eslint": "^8.46.3",
-    "eslint": "^9.39.1",
-    "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "eslint": "^8.x",
+    "typescript": "^5.3.0"
   }
 }

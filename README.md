@@ -1,2 +1,0 @@
-# YTP
-YTP project
