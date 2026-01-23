@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}} 'unsafe-inline';">
+	<!-- <link href="{{styleUri}}" rel="stylesheet"> -->
+</head>
+<body>
+    <div class="container">
+    <h2>Multi-Level Dropdowns</h2>
+    <p>In this example, we have created a .dropdown-submenu class for multi-level dropdowns (see style section above).</p>
+    <p>Note that we have added jQuery to open the multi-level dropdown on click (see script section below).</p>                                        
+    <div class="dropdown">
+        <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown">Tutorials
+        <span class="caret"></span></button>
+        <ul class="dropdown-menu">
+        <li><a tabindex="-1" href="#">HTML</a></li>
+        <li><a tabindex="-1" href="#">CSS</a></li>
+        <li class="dropdown-submenu">
+            <a class="test" tabindex="-1" href="#">New dropdown <span class="caret"></span></a>
+            <ul class="dropdown-menu">
+            <li><a tabindex="-1" href="#">2nd level dropdown</a></li>
+            <li><a tabindex="-1" href="#">2nd level dropdown</a></li>
+            <li class="dropdown-submenu">
+                <a class="test" href="#">Another dropdown <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                <li><a href="#">3rd level dropdown</a></li>
+                <li><a href="#">3rd level dropdown</a></li>
+                </ul>
+            </li>
+            </ul>
+        </li>
+        </ul>
+    </div>
+    </div>
+
+
+	<div class="container">
+		{{variables}}
+	</div>
+    <script>
+        $(document).ready(function(){
+        $('.dropdown-submenu a.test').on("click", function(e){
+            $(this).next('ul').toggle();
+            e.stopPropagation();
+            e.preventDefault();
+        });
+
+        });
+        const vscode = acquireVsCodeApi();
+
+        // Handle checkbox changes
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('var-checkbox')) {
+                const name = e.target.dataset.name;
+                const checked = e.target.checked;
+                vscode.postMessage({
+                    command: 'toggleVariable',
+                    name: name,
+                    checked: checked
+                });
+            }
+        });
+
+    </script>
+</body>
+</html>

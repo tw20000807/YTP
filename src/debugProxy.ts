@@ -31,13 +31,17 @@ interface Variable {
 }
 
 /**
- * Exported interface for variable data returned to caller
+ * Exported interface for variable data with change tracking
  */
 export interface VariableData {
 	name: string;
 	type?: string;
 	value: string;
 	children?: VariableData[];
+	changeType?: 'new' | 'modified' | 'unchanged'; // Track if variable is new, modified, or unchanged
+	previousValue?: string; // Previous value if modified
+	variablesReference?: number; // Reference for nested variables (needed for setVariable)
+	parent?: VariableData; // Reference to parent variable
 }
 
 /**
@@ -62,12 +66,13 @@ export interface DebugContext {
 /**
  * DebuggerProxy class
  * Manages debug sessions and fetches variable data when debugger stops
- * Does NOT print - only returns data to caller
+ * Tracks variable changes (new, modified, unchanged)
  */
 export class DebuggerProxy implements vscode.Disposable {
 	private activeSession: vscode.DebugSession | undefined;
 	private activeFrameId: number | undefined;
 	private disposables: vscode.Disposable[] = [];
+	private previousContext: DebugContext | null = null; // Store previous context for change detection
 	
 	// Callback to notify when debugger stops
 	private onStoppedCallback: ((context: DebugContext) => Promise<void>) | undefined;
@@ -148,11 +153,48 @@ export class DebuggerProxy implements vscode.Disposable {
 					// Fetch the debug context and call the callback
 					const context = await this.fetchDebugContext(session, threadId);
 					if (context && this.onStoppedCallback) {
+						// Mark changes in variables before calling callback
+						this.markVariableChanges(context);
+						// Store for next comparison
+						this.previousContext = context;
 						await this.onStoppedCallback(context);
 					}
 				}
 			}
 		};
+	}
+
+	/**
+	 * Compare current variables with previous context to mark changes
+	 */
+	private identical(v1 : VariableData, v2: VariableData): boolean {
+		if(v1.value !== v2.value) return false;
+		const children1 = v1.children || [];
+        const children2 = v2.children || [];
+		if(children1.length != children2.length) return false;
+		for(let i = 0;i < children1.length;i++){
+			if(!this.identical(children1[i],children2[i])){
+				return false;
+			}
+		}
+		return true
+	}
+	private markVariableChanges(context: DebugContext): void {
+		for (const scope of context.scopes) {
+			const previousScope = this.previousContext?.scopes.find(s => s.name === scope.name);
+			
+			for (const variable of scope.variables) {
+				const previousVar = previousScope?.variables.find(v => v.name === variable.name);
+				
+				if (!previousVar) {
+					variable.changeType = 'new';
+				} else if (this.identical(previousVar,variable)) {
+					variable.changeType = 'modified';
+				} else {
+					variable.changeType = 'unchanged';
+				}
+			}
+		}
 	}
 
 	/**
@@ -246,12 +288,16 @@ export class DebuggerProxy implements vscode.Disposable {
 	 * Fetch variable data recursively (for nested variables)
 	 * Returns variable data with children
 	 */
-	private async fetchVariableData(session: vscode.DebugSession, variable: Variable, depth: number): Promise<VariableData> {
+	private async fetchVariableData(session: vscode.DebugSession, variable: Variable, depth: number, parent?: VariableData): Promise<VariableData> {
 		const varData: VariableData = {
 			name: variable.name,
 			type: variable.type,
 			value: variable.value
 		};
+
+		if (parent) {
+			Object.defineProperty(varData, 'parent', { value: parent, enumerable: false, writable: true });
+		}
 
 		// If variable has children and we haven't reached depth limit, fetch them
 		if (variable.variablesReference > 0 && depth < 3) {
@@ -263,7 +309,7 @@ export class DebuggerProxy implements vscode.Disposable {
 				if (childResponse.variables && childResponse.variables.length > 0) {
 					varData.children = [];
 					for (const childVar of childResponse.variables) {
-						const childData = await this.fetchVariableData(session, childVar, depth + 1);
+						const childData = await this.fetchVariableData(session, childVar, depth + 1, varData);
 						varData.children.push(childData);
 					}
 				}
@@ -323,6 +369,38 @@ export class DebuggerProxy implements vscode.Disposable {
 		} catch (error) {
 			console.error(`Error getting debug context: ${error}`);
 			return null;
+		}
+	}
+
+	/**
+	 * Set a variable value in the debug session
+	 * @param variablesReference - The reference to the variable's parent scope
+	 * @param name - The variable name
+	 * @param value - The new value (as string)
+	 * @returns True if successful, false otherwise
+	 */
+	public async setVariable(
+		variablesReference: number,
+		name: string,
+		value: string
+	): Promise<boolean> {
+		if (!this.activeSession) {
+			console.error('No active debug session');
+			return false;
+		}
+
+		try {
+			const response = await this.activeSession.customRequest('setVariable', {
+				variablesReference: variablesReference,
+				name: name,
+				value: value
+			});
+
+			console.log(`Variable set successfully: ${name} = ${value}`);
+			return true;
+		} catch (error) {
+			console.error(`Error setting variable: ${error}`);
+			return false;
 		}
 	}
 
