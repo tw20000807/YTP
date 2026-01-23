@@ -15,11 +15,23 @@ export class WebviewManager implements vscode.Disposable {
 		if (!this.webviewPanel) {
 			this.createWebviewPanel();
 		}
-		// Show webview and update content
+
+		// Ensure HTML is set (only needed once, but safe to check)
+		if (!this.webviewPanel!.webview.html) {
+			this.webviewPanel!.webview.html = await this.getWebviewHtml();
+		}
+
 		this.webviewPanel!.reveal(vscode.ViewColumn.Beside);
-		this.webviewPanel!.webview.html = await this.generateHtml(context);
+
+		// Send data via message protocol instead of replacing HTML
+		this.webviewPanel!.webview.postMessage({
+			command: 'updateVariables',
+			// Pass relevant data from DebugContext
+			scopes: context.scopes,
+			// Pass current watch state if needed, though frontend manages visualizers
+			watchedVariables: Array.from(this.watchedVariables) 
+		});
 		
-		this.checkAndLogVariables(context);
 	}
 
 	private createWebviewPanel(): void {
@@ -34,6 +46,13 @@ export class WebviewManager implements vscode.Disposable {
 			}
 		);
 
+		// Initialize HTML content immediately
+		this.getWebviewHtml().then(html => {
+			if (this.webviewPanel) {
+				this.webviewPanel.webview.html = html;
+			}
+		});
+
 		this.webviewPanel.webview.onDidReceiveMessage(message => {
 			switch (message.command) {
 				case 'toggleVariable':
@@ -45,6 +64,14 @@ export class WebviewManager implements vscode.Disposable {
 						this.outputChannel.appendLine(`Stopped watching: ${message.name}`);
 					}
 					return;
+				case 'saveLayout':
+					// Persist layout state to workspace
+					vscode.commands.executeCommand('setContext', 'ytp.layoutState', message.state);
+					// You might want to use workspaceState Memento if available, 
+					// but passing context here is tricky without passing ExtensionContext to WebviewManager.
+					// For now, let's just log it or we can add a method to save transparently.
+					// Ideally, WebviewManager should have access to ExtensionContext.globalState or workspaceState.
+					return;
 			}
 		}, null, this.disposables);
 
@@ -53,94 +80,32 @@ export class WebviewManager implements vscode.Disposable {
 		}, null, this.disposables);
 	}
 
-	private async generateHtml(context: DebugContext): Promise<string> {
-		// Use the flat list of variables directly
-		const variables:VariableData[] = [];
-		for (const scopes of context.scopes){
-			if(scopes.name !== 'Locals' && scopes.name !== 'Globals'){
-				continue;
-			}
-			for (const variable of scopes.variables){
-				variables.push(variable);
-			}
-		}
-
-		const variablesHtml = `<ul>${variables.map((v: VariableData) => this.renderVariable(v)).join('')}</ul>`;
-
-		const stylePath = vscode.Uri.joinPath(this.extensionUri, 'media', 'webview.css');
+	private async getWebviewHtml(): Promise<string> {
+		const stylePath = vscode.Uri.joinPath(this.extensionUri, 'media', 'main.css'); // Use main.css directly
+		const scriptPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js'); // Use main.js directly
+		
 		const styleUri = this.webviewPanel!.webview.asWebviewUri(stylePath);
+		const scriptUri = this.webviewPanel!.webview.asWebviewUri(scriptPath);
 		
 		const htmlPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'webview.html');
-		const htmlContent = await vscode.workspace.fs.readFile(htmlPath);
-		let html = Buffer.from(htmlContent).toString('utf-8');
-
-		html = html.replace('{{cspSource}}', this.webviewPanel!.webview.cspSource);
-		html = html.replace('{{styleUri}}', styleUri.toString());
-		html = html.replace('{{variables}}', variablesHtml);
-
-		return html;
-	}
-
-	private renderVariable(v: VariableData, parentPath: string = ''): string {
-		const fullPath = parentPath ? `${parentPath}.${v.name}` : v.name;
-		const isChecked = this.watchedVariables.has(fullPath) ? 'checked' : '';
-		
-		let classes = 'var-item';
-		if (v.changeType === 'modified') {
-			classes += ' modified';
+		let htmlContent = '';
+		try {
+			const fileData = await vscode.workspace.fs.readFile(htmlPath);
+			htmlContent = Buffer.from(fileData).toString('utf-8');
+		} catch (e) {
+			htmlContent = `<!DOCTYPE html><html><body>Error loading html: ${e}</body></html>`;
 		}
 
-		const checkbox = `<input type="checkbox" class="var-checkbox" data-name="${fullPath}" ${isChecked}>`;
-		const name = `<span class="var-name" title="${v.type}">${v.name}</span>`;
-		const value = `<span class="var-value">${v.value}</span>`;
-		const type = v.type ? `<span class="var-type">${v.type}</span>` : '';
+		// Inject CSP and URIs
+		htmlContent = htmlContent.replace('{{cspSource}}', this.webviewPanel!.webview.cspSource);
+		htmlContent = htmlContent.replace('{{styleUri}}', styleUri.toString());
+		htmlContent = htmlContent.replace('{{scriptUri}}', scriptUri.toString()); // We need to add this tag to webview.html
 
-		const content = `
-			<div class="${classes}">
-				${checkbox}
-				${name}
-				${type}
-				${value}
-			</div>
-		`;
-
-		if (v.children && v.children.length > 0) {
-			const childrenHtml = v.children.map(child => this.renderVariable(child, fullPath)).join('');
-			return `
-				<li>
-					<details>
-						<summary>${content}</summary>
-						<ul>${childrenHtml}</ul>
-					</details>
-				</li>
-			`;
-		} else {
-			return `<li>${content}</li>`;
-		}
+		return htmlContent;
 	}
 
-	private checkAndLogVariables(context: DebugContext): void {
-		if (this.watchedVariables.size === 0) return;
+	// Remove old generateHtml and renderVariable methods as they are no longer used
 
-		const logVariable = (v: VariableData, parentPath: string = '') => {
-			const fullPath = parentPath ? `${parentPath}.${v.name}` : v.name;
-			
-			if (this.watchedVariables.has(fullPath)) {
-				this.outputChannel.appendLine(`[Watch] ${fullPath}: ${v.value}`);
-			}
-
-			if (v.children) {
-				v.children.forEach(child => logVariable(child, fullPath));
-			}
-		};
-
-		for (const scopes of context.scopes) {
-			if (scopes.name !== 'Locals' && scopes.name !== 'Globals') continue;
-			for (const variable of scopes.variables) {
-				logVariable(variable);
-			}
-		}
-	}
 
 	public dispose(): void {
 		this.disposables.forEach(d => d.dispose());
