@@ -1,0 +1,73 @@
+{
+  "frameId": 1000,
+  "scopes": [
+    {
+      "scopeName": "Locals",
+      "variables": [
+        {
+          "name": "i",
+          "value": "779647075",
+          "type": "int"
+        },
+        {
+          "name": "arr",
+          "value": "std::vector of length 10, capacity 10",
+          "type": "std::vector<int, std::allocator<int> >",
+          "children": [
+            {
+              "name": "[0]",
+              "value": "1",
+              "type": "int"
+            },
+            {
+              "name": "[1]",
+              "value": "2",
+              "type": "int"
+            },
+            {
+              "name": "[2]",
+              "value": "3",
+              "type": "int"
+            },
+            {
+              "name": "[3]",
+              "value": "4",
+              "type": "int"
+            },
+            {
+              "name": "[4]",
+              "value": "5",
+              "type": "int"
+            },
+            {
+              "name": "[5]",
+              "value": "6",
+              "type": "int"
+            },
+            {
+              "name": "[6]",
+              "value": "7",
+              "type": "int"
+            },
+            {
+              "name": "[7]",
+              "value": "8",
+              "type": "int"
+            },
+            {
+              "name": "[8]",
+              "value": "9",
+              "type": "int"
+            },
+            {
+              "name": "[9]",
+              "value": "10",
+              "type": "int"
+            }
+          ]
+        }
+      ]
+    },
+    null
+  ]
+}

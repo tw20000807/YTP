@@ -9,7 +9,10 @@ export function activate(context: vscode.ExtensionContext) {
 	debugProxy.onDidStop(async (text) => {
 		const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-		const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, 'debug_log.txt');
+		const folderName = '.YTP'; 
+		const folderUri = vscode.Uri.joinPath(workspaceFolders[0].uri, folderName);
+		const fileUri = vscode.Uri.joinPath(folderUri, 'debug_log.txt');
+
 		try{
 			const content = new TextEncoder().encode(JSON.stringify(text, null, 2));
         	await vscode.workspace.fs.writeFile(fileUri, content);

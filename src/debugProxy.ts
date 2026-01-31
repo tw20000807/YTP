@@ -78,6 +78,7 @@ export class DebuggerProxy implements vscode.Disposable {
 			}
 			const scopes = await this.getScopes({ frameId: this.activeFrameID });
 			const detailedScopes = await Promise.all(scopes.map(async (scope) => {
+				if(scope.name === "Registers") return;
 				return {
 					scopeName: scope.name,
 					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0)
