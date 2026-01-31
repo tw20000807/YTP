@@ -2,3 +2,6 @@ out/
 node_modules/
 *.vsix
 .vscode-test/
+.vscode/
+test_cpp/.vscode/
+test_cpp/.YTP/

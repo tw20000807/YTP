@@ -398,9 +398,11 @@ class ResizeHandle {
         if (newWidth > 150 && newWidth < 600) {
             this.target.style.width = `${newWidth}px`;
         }
+        console.log("new" + toString(this.target.style.width));
     };
 
     onMouseUp() {
+        console.log("start")
         this.isResizing = false;
         document.body.style.cursor = 'default';
         document.removeEventListener('mousemove', this._boundMouseMove);
