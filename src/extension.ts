@@ -1,42 +1,26 @@
 import * as vscode from 'vscode';
-import { DebuggerProxy, DebugContext } from './debugProxy';
-import { WebviewManager } from './webview';
+import { DebuggerProxy } from './debugProxy';
+// import { WebviewManager } from './webview';
 
-/**
- * Extension activation function
- */
 export function activate(context: vscode.ExtensionContext) {
-	// Create webview manager to display variables
-	const webviewManager = new WebviewManager(context.extensionUri);
-
-	// Create the debugger proxy to fetch debug data
+	// const webviewManager = new WebviewManager(context.extensionUri);
 	const debugProxy = new DebuggerProxy();
 
-	// Set up callback - when debugger stops, show in webview
-	debugProxy.onStopped(async (debugContext: DebugContext) => {
-		// Show variables in webview
-		webviewManager.show(debugContext);
-	});
-
-	// Register command to manually fetch variables
-	const printCommand = vscode.commands.registerCommand('ytp.printDebugVariables', async () => {
-		const debugContext = await debugProxy.getCurrentDebugContext();
-		if (debugContext) {
-			webviewManager.show(debugContext);
-		} else {
-			vscode.window.showWarningMessage('No debug context available');
+	debugProxy.onDidStop(async (text) => {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) return;
+		const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, 'debug_log.txt');
+		try{
+			const content = new TextEncoder().encode(JSON.stringify(text, null, 2));
+        	await vscode.workspace.fs.writeFile(fileUri, content);
+		}
+		catch (e) {
+			console.error("Failed to write debug log:", e);
 		}
 	});
-
-	// Track disposables for cleanup
 	context.subscriptions.push(
-		debugProxy,
-		webviewManager,
-		printCommand
+		debugProxy
 	);
 }
 
-/**
- * Extension deactivation function
- */
 export function deactivate() {}
