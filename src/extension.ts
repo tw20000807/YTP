@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { DebuggerProxy } from './debugProxy';
-// import { WebviewManager } from './webview';
+import { WebviewManager } from './webview';
 
 export function activate(context: vscode.ExtensionContext) {
-	// const webviewManager = new WebviewManager(context.extensionUri);
+	const webviewManager = new WebviewManager(context.extensionUri);
 	const debugProxy = new DebuggerProxy();
 
-	debugProxy.onDidStop(async (text) => {
+	debugProxy.onDidStop(async (text) => {  
+		// Update webview with new data
+		webviewManager.show(text);
+		
 		const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
 		const folderName = '.YTP'; 
@@ -22,7 +25,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 	context.subscriptions.push(
-		debugProxy
+		debugProxy,
+		webviewManager
 	);
 }
 

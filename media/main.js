@@ -1,4 +1,5 @@
 // @ts-nocheck
+console.log('[YTP] main.js is loading...');
 
 // Visualizer types
 /**
@@ -88,9 +89,30 @@ class VisualizerController {
         const message = event.data;
         switch (message.command) {
             case 'updateVariables':
+                this.populateVarMap(message.scopes);
                 this.renderVariableList(message.scopes);
                 this.visualizerManager.updateAll(this.varMap);
                 break;
+        }
+    }
+
+    populateVarMap(scopes) {
+        this.varMap.clear();
+        
+        const traverse = (variables, parentPath) => {
+            variables.forEach(v => {
+                const path = parentPath ? `${parentPath}.${v.name}` : v.name;
+                this.varMap.set(path, v);
+                if (v.children && v.children.length > 0) {
+                    traverse(v.children, path);
+                }
+            });
+        };
+
+        if (scopes && scopes.length) {
+            scopes.forEach(scope => {
+                traverse(scope.variables, '');
+            });
         }
     }
 
@@ -98,23 +120,41 @@ class VisualizerController {
         const list = document.getElementById('variable-list');
         if (!list) return;
         
-        list.innerHTML = '';
-        this.varMap.clear();
+        // 1. Capture expansion state before clearing
+        const expandedPaths = new Set();
+        const openDetails = list.querySelectorAll('details[open]');
+        openDetails.forEach(details => {
+            const checkbox = details.querySelector('.var-checkbox');
+            if (checkbox && checkbox.dataset.path) {
+                expandedPaths.add(checkbox.dataset.path);
+            }
+        });
 
-        const buildTree = (variables, parentPath) => {
+        list.innerHTML = '';
+
+        const renderLevel = (container, variables, parentPath) => {
             const ul = document.createElement('ul');
             ul.style.listStyle = 'none';
             ul.style.paddingLeft = '20px';
 
             variables.forEach(v => {
                 const path = parentPath ? `${parentPath}.${v.name}` : v.name;
-                this.varMap.set(path, v);
-
                 const li = document.createElement('li');
                 
-                // Header
+                // Header - Only Checkbox and Name
                 const header = document.createElement('div');
                 header.className = 'var-header';
+                header.style.display = 'flex';
+                header.style.alignItems = 'center';
+
+                // Arrow Indicator
+                const arrow = document.createElement('span');
+                arrow.style.display = 'inline-block';
+                arrow.style.width = '20px';
+                arrow.style.textAlign = 'center';
+                arrow.style.cursor = 'pointer';
+                arrow.style.userSelect = 'none';
+                arrow.textContent = (v.children && v.children.length > 0) ? '▸' : '';
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -127,40 +167,60 @@ class VisualizerController {
                 const name = document.createElement('span');
                 name.className = 'var-name';
                 name.textContent = v.name;
+                name.style.marginLeft = '5px';
+                name.style.cursor = 'default';
 
-                const value = document.createElement('span');
-                value.className = 'var-value';
-                value.textContent = v.value;
-                
-                const type = document.createElement('span');
-                type.className = 'var-type';
-                type.textContent = v.type || '';
-
+                header.appendChild(arrow);
                 header.appendChild(checkbox);
                 header.appendChild(name);
-                header.appendChild(value);
-                header.appendChild(type);
 
-                li.appendChild(header);
-
-                // Children (Recursion)
+                // Children (Lazy Loading)
                 if (v.children && v.children.length > 0) {
                     const details = document.createElement('details');
                     const summary = document.createElement('summary');
-                    summary.style.listStyle = 'none'; // Hide default marker
+                    summary.style.listStyle = 'none'; 
+                    summary.style.cursor = 'pointer';
+                    
+                    // Hide default triangle for WebKit
+                    summary.style.listStyleType = 'none';
+                    
                     summary.appendChild(header);
                     
                     details.appendChild(summary);
-                    details.appendChild(buildTree(v.children, path));
-                    li.innerHTML = ''; // Clear previous append
+                    
+                    // Lazy load + Arrow update listener
+                    const onToggle = () => {
+                        arrow.textContent = details.open ? '▾' : '▸';
+                        
+                        if (details.open && !details.dataset.loaded) {
+                            renderLevel(details, v.children, path);
+                            details.dataset.loaded = 'true';
+                        }
+                    };
+                    details.addEventListener('toggle', onToggle);
+
+                    // 2. Restore expansion state
+                    if (expandedPaths.has(path)) {
+                        details.open = true;
+                        details.dataset.loaded = 'true';
+                        arrow.textContent = '▾';
+                        // Immediately render children to persist deep nesting
+                        renderLevel(details, v.children, path);
+                    }
+
                     li.appendChild(details);
                 } else {
+                    // Align leaf nodes with invisible spacer
+                    if (!v.children || v.children.length === 0) {
+                        arrow.style.visibility = 'hidden';
+                        arrow.textContent = '▸'; // Occupy space
+                    }
                     li.appendChild(header);
                 }
 
                 ul.appendChild(li);
             });
-            return ul;
+            container.appendChild(ul);
         };
 
         if (scopes && scopes.length) {
@@ -172,7 +232,8 @@ class VisualizerController {
                    scopeHeader.style.padding = '5px 10px';
                    scopeHeader.style.backgroundColor = '#252526';
                    list.appendChild(scopeHeader);
-                   list.appendChild(buildTree(scope.variables, ''));
+                   
+                   renderLevel(list, scope.variables, '');
                 }
             });
         }
@@ -359,11 +420,12 @@ class TextVisualizer {
         this.container.appendChild(this.pre);
     }
     update(variable) {
-        this.pre.textContent = JSON.stringify(variable, (key, value) => {
-            if (key === 'parent') return undefined; // Avoid circular
-            if (key === 'children') return '[Children...]'; // Simplify
-            return value;
-        }, 2);
+        this.pre.textContent = variable.value;
+        // this.pre.textContent = JSON.stringify(variable, (key, value) => {
+        //     if (key === 'parent') return undefined; // Avoid circular
+        //     if (key === 'children') return '[Children...]'; // Simplify
+        //     return value;
+        // }, 2);
     }
 }
 
@@ -378,38 +440,43 @@ class ResizeHandle {
         this.isResizing = false;
 
         this.handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
             this.isResizing = true;
             document.body.style.cursor = 'col-resize';
             this.startX = e.clientX;
-            this.startWidth = parseInt(getComputedStyle(this.target).width);
+            this.startWidth = parseInt(getComputedStyle(this.target).width, 10);
             
-            this._boundMouseMove = this.onMouseMove.bind(this);
-            this._boundMouseUp = this.onMouseUp.bind(this);
-
-            document.addEventListener('mousemove', this._boundMouseMove);
-            document.addEventListener('mouseup', this._boundMouseUp);
+            document.addEventListener('mousemove', this.handleMouseMove);
+            document.addEventListener('mouseup', this.handleMouseUp);
         });
+        
+        this.handleMouseMove = (e) => {
+            if (!this.isResizing) return;
+            e.preventDefault();
+            const dx = e.clientX - this.startX;
+            const newWidth = this.startWidth + dx;
+            if (newWidth > 150 && newWidth < 600) {
+                this.target.style.width = `${newWidth}px`;
+            }
+        };
+        
+        this.handleMouseUp = (e) => {
+            if (!this.isResizing) return;
+            e.preventDefault();
+            this.isResizing = false;
+            document.body.style.cursor = 'default';
+            document.removeEventListener('mousemove', this.handleMouseMove);
+            document.removeEventListener('mouseup', this.handleMouseUp);
+            if (this.onEnd) this.onEnd();
+        };
     }
-
-    onMouseMove(e) {
-        if (!this.isResizing) return;
-        const dx = e.clientX - this.startX;
-        const newWidth = this.startWidth + dx;
-        if (newWidth > 150 && newWidth < 600) {
-            this.target.style.width = `${newWidth}px`;
-        }
-        console.log("new" + toString(this.target.style.width));
-    };
-
-    onMouseUp() {
-        console.log("start")
-        this.isResizing = false;
-        document.body.style.cursor = 'default';
-        document.removeEventListener('mousemove', this._boundMouseMove);
-        document.removeEventListener('mouseup', this._boundMouseUp);
-        if (this.onEnd) this.onEnd();
-    };
 }
 
-// Initialize
-window.controller = new VisualizerController();
+// Initialize with DOM ready check
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.controller = new VisualizerController();
+    });
+} else {
+    window.controller = new VisualizerController();
+}
