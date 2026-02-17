@@ -98,12 +98,9 @@ body {
     flex: 1;
     background-color: var(--bg-color);
     overflow: auto;
-    position: relative;
+    position: relative; /* Container for absolute positioned blocks */
     padding: 10px;
-    display: flex;
-    flex-wrap: wrap; /* Masonry-ish flow */
-    align-content: flex-start;
-    gap: 10px;
+    min-height: 100%;
 }
 
 .empty-state, .empty-state-canvas {
@@ -122,9 +119,25 @@ body {
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    min-width: 200px;
-    min-height: 150px;
-    position: relative;
+    min-width: 150px;
+    min-height: 80px;
+    max-width: 600px;
+    max-height: 500px;
+    resize: both;
+    overflow: hidden;
+}
+
+/* Visible resize handle */
+.block::after {
+    content: '⋰⋱';
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 12px;
+    color: #666;
+    cursor: nwse-resize;
+    pointer-events: none;
+    user-select: none;
 }
 
 .block-header {
@@ -181,11 +194,5 @@ body {
     font-family: Consolas, 'Courier New', monospace;
     white-space: pre-wrap;
     word-break: break-all;
-}
-
-/* Dragging state */
-.block.dragging {
-    opacity: 0.5;
-    border: 2px dashed var(--highlight-color);
 }
 

@@ -96,10 +96,27 @@ export class WebviewManager implements vscode.Disposable {
 
 	private async getWebviewHtml(): Promise<string> {
 		const stylePath = vscode.Uri.joinPath(this.extensionUri, 'media', 'main.css'); // Use main.css directly
-		const scriptPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js'); // Use main.js directly
 		
 		const styleUri = this.webviewPanel!.webview.asWebviewUri(stylePath);
-		const scriptUri = this.webviewPanel!.webview.asWebviewUri(scriptPath);
+		
+        // Generate script tags for all JS files
+        const scriptPaths = [
+            ['media', 'core', 'Registry.js'],
+            ['media', 'visualizers', 'BaseVisualizer.js'],
+            ['media', 'visualizers', 'TextVisualizer.js'],
+            ['media', 'visualizers', 'JsonVisualizer.js'],
+            ['media', 'visualizers', 'TableVisualizer.js'],
+            ['media', 'utils', 'ResizeHandle.js'],
+            ['media', 'core', 'Manager.js'],
+            ['media', 'main.js']
+        ];
+
+        const scriptTags = scriptPaths.map(pathSegments => {
+            const uri = this.webviewPanel!.webview.asWebviewUri(
+                vscode.Uri.joinPath(this.extensionUri, ...pathSegments)
+            );
+            return `<script src="${uri.toString()}"></script>`;
+        }).join('\n\t\t');
 		
 		const htmlPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'webview.html');
 		let htmlContent = '';
@@ -113,7 +130,7 @@ export class WebviewManager implements vscode.Disposable {
 		// Inject CSP and URIs - use regex global flag because {{cspSource}} appears twice in CSP
 		htmlContent = htmlContent.replace(/\{\{cspSource\}\}/g, this.webviewPanel!.webview.cspSource);
 		htmlContent = htmlContent.replace(/\{\{styleUri\}\}/g, styleUri.toString());
-		htmlContent = htmlContent.replace(/\{\{scriptUri\}\}/g, scriptUri.toString());
+		htmlContent = htmlContent.replace(/\{\{scripts\}\}/g, scriptTags);
 
 		return htmlContent;
 	}
