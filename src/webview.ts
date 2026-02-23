@@ -99,13 +99,37 @@ export class WebviewManager implements vscode.Disposable {
 		
 		const styleUri = this.webviewPanel!.webview.asWebviewUri(stylePath);
 		
-        // Generate script tags for all JS files
+        // Auto-load all lib scripts from media/lib/ (e.g. d3-force.min.js) before visualizers
+        const libDir = vscode.Uri.joinPath(this.extensionUri, 'media', 'lib');
+        let libPaths: string[][] = [];
+        try {
+            const libFiles = await vscode.workspace.fs.readDirectory(libDir);
+            libPaths = libFiles
+                .filter(([name, type]) => type === vscode.FileType.File && name.endsWith('.js'))
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name]) => ['media', 'lib', name]);
+        } catch (_) { /* lib/ folder may not exist */ }
+
+        // Auto-discover all visualizer scripts from media/visualizers/
+        // BaseVisualizer.js must load first so subclasses can extend it
+        const visualizersDir = vscode.Uri.joinPath(this.extensionUri, 'media', 'visualizers');
+        const visualizerFiles = await vscode.workspace.fs.readDirectory(visualizersDir);
+        const visualizerPaths: string[][] = [
+            ['media', 'visualizers', 'BaseVisualizer.js'], // always first
+            ...visualizerFiles
+                .filter(([name, type]) =>
+                    type === vscode.FileType.File &&
+                    name.endsWith('.js') &&
+                    name !== 'BaseVisualizer.js'
+                )
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name]) => ['media', 'visualizers', name])
+        ];
+
         const scriptPaths = [
             ['media', 'core', 'Registry.js'],
-            ['media', 'visualizers', 'BaseVisualizer.js'],
-            ['media', 'visualizers', 'TextVisualizer.js'],
-            ['media', 'visualizers', 'JsonVisualizer.js'],
-            ['media', 'visualizers', 'TableVisualizer.js'],
+            ...libPaths,
+            ...visualizerPaths,
             ['media', 'utils', 'ResizeHandle.js'],
             ['media', 'core', 'Manager.js'],
             ['media', 'main.js']

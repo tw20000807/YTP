@@ -3,7 +3,8 @@
 using namespace std;
 int glo = 10;
 int main(){
-    vector< int > arr(10),arr2(10),arr3(10),arr4(10);
+    
+    vector<int> arr(10),arr2(10);
     for(int i = 0; i < 10; ++i) {
         arr[i] = i + 1;
     }

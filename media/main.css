@@ -121,8 +121,6 @@ body {
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     min-width: 150px;
     min-height: 80px;
-    max-width: 600px;
-    max-height: 500px;
     resize: both;
     overflow: hidden;
 }
@@ -196,3 +194,188 @@ body {
     word-break: break-all;
 }
 
+/* Block Toolbar Row (inserted between header and content by Manager) */
+.block-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;         /* wraps to next line when width is too narrow */
+    align-items: center;
+    gap: 12px;
+    padding: 4px 8px;
+    background-color: #2a2d2e;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+/* Array Visualizer */
+.viz-array-control {
+    display: flex;
+    align-items: center;
+    font-size: 0.85em;
+    color: var(--text-color);
+}
+
+.viz-array-input {
+    width: 52px;
+    margin-left: 4px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 4px;
+    font-size: 0.9em;
+}
+
+.viz-array-input:focus {
+    outline: 1px solid var(--highlight-color);
+    border-color: var(--highlight-color);
+}
+
+.viz-array-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+.viz-array-box {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color);
+    margin-right: -1px; /* collapse adjacent borders for connected look */
+    min-width: 44px;
+    text-align: center;
+    font-family: monospace;
+    position: relative;
+}
+
+.viz-array-box:first-child {
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+
+.viz-array-box:last-child {
+    margin-right: 0;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+.viz-array-index {
+    background-color: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.75em;
+    padding: 1px 4px;
+    color: #888;
+    user-select: none;
+}
+
+.viz-array-value {
+    padding: 5px 6px;
+    background-color: var(--bg-color);
+    white-space: nowrap;
+}
+
+.viz-array-empty {
+    color: #666;
+    font-style: italic;
+    padding: 10px;
+}
+
+@keyframes viz-array-flash {
+    0%   { background-color: #b8860b; }
+    60%  { background-color: #b8860b; }
+    100% { background-color: var(--bg-color); }
+}
+
+.viz-array-box--changed .viz-array-value {
+    animation: viz-array-flash 1s ease-out forwards;
+}
+
+/* ── Graph Visualizer ───────────────────────────────────────── */
+
+.viz-graph-container {
+    position: relative;
+    width: 100%;
+    overflow: auto;
+    flex: 1;
+}
+
+.viz-graph-svg {
+    display: block;
+}
+
+/* Nodes */
+.viz-graph-node {
+    cursor: grab;
+}
+.viz-graph-node:active {
+    cursor: grabbing;
+}
+.viz-graph-node circle {
+    fill: #1e3a5f;
+    stroke: #6e9ccf;
+    stroke-width: 1.5px;
+    transition: fill 0.15s;
+}
+.viz-graph-node:hover circle {
+    fill: #2a5080;
+}
+.viz-graph-node text {
+    fill: #d4e8ff;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Edges */
+.viz-graph-edge {
+    stroke: #6e9ccf;
+    stroke-width: 1.5px;
+}
+
+.viz-graph-edge-label {
+    fill: #a0c4e8;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    pointer-events: none;
+}
+
+/* Toolbar controls */
+.viz-graph-control {
+    display: flex;
+    align-items: center;
+    font-size: 0.85em;
+    color: var(--text-color);
+}
+
+.viz-graph-select {
+    margin-left: 4px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 4px;
+    font-size: 0.9em;
+}
+
+.viz-graph-select:focus {
+    outline: 1px solid var(--highlight-color);
+    border-color: var(--highlight-color);
+}
+
+.viz-graph-toggle {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 8px;
+    font-size: 0.9em;   /* match .viz-graph-select */
+    cursor: pointer;
+    vertical-align: middle;
+    line-height: normal;
+}
+
+.viz-graph-toggle--active {
+    background-color: #1e3a5f;
+    border-color: #6e9ccf;
+    color: #d4e8ff;
+}

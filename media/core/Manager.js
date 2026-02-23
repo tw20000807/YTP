@@ -151,6 +151,14 @@ class VisualizerManager {
         if (typeof visualizerRegistry !== 'undefined') {
              if (!visualizerRegistry.registry.has(type)) safeType = 'Text';
              const visualizer = visualizerRegistry.create(safeType, content);
+
+             // Insert toolbar row if the visualizer provides one
+             const toolbar = visualizer.getToolbar ? visualizer.getToolbar() : null;
+             if (toolbar) {
+                 toolbar.classList.add('block-toolbar');
+                 block.insertBefore(toolbar, content);
+             }
+
              visualizer.update(variable);
              
              // Auto-size block to fit content
@@ -167,28 +175,18 @@ class VisualizerManager {
     }
 
     autoSizeBlock(block, content) {
-        // Temporarily remove constraints to measure natural size
-        const tempWidth = block.style.width;
-        const tempHeight = block.style.height;
+        // Set to auto so the block shrinks to its natural size
         block.style.width = 'auto';
         block.style.height = 'auto';
-        
-        // Force layout recalculation
         block.style.display = 'inline-flex';
-        
-        // Measure content
-        const contentWidth = content.scrollWidth + 20; // Add padding
-        const contentHeight = content.scrollHeight + 50; // Add padding + header
-        
-        // Restore display
+
+        // Measure the full block (header + toolbar + content) in one shot
+        const naturalWidth  = Math.max(block.scrollWidth,  150);
+        const naturalHeight = Math.max(block.scrollHeight, 80);
+
         block.style.display = 'flex';
-        
-        // Apply size with constraints
-        const width = Math.min(Math.max(contentWidth, 150), 600);
-        const height = Math.min(Math.max(contentHeight, 80), 500);
-        
-        block.style.width = `${width}px`;
-        block.style.height = `${height}px`;
+        block.style.width  = `${naturalWidth}px`;
+        block.style.height = `${naturalHeight}px`;
     }
 
     // @ts-ignore
@@ -197,10 +195,23 @@ class VisualizerManager {
         if (!entry) return;
 
         if (entry.visualizer.dispose) entry.visualizer.dispose();
+
+        // Remove existing toolbar row if present
+        const existingToolbar = entry.element.querySelector('.block-toolbar');
+        if (existingToolbar) existingToolbar.remove();
+
         entry.contentElement.innerHTML = '';
         
         if (typeof visualizerRegistry !== 'undefined') {
             const newViz = visualizerRegistry.create(newType, entry.contentElement);
+
+            // Insert new toolbar row if the visualizer provides one
+            const newToolbar = newViz.getToolbar ? newViz.getToolbar() : null;
+            if (newToolbar) {
+                newToolbar.classList.add('block-toolbar');
+                entry.element.insertBefore(newToolbar, entry.contentElement);
+            }
+
             newViz.update(entry.variableData);
             entry.visualizer = newViz;
             entry.type = newType;
