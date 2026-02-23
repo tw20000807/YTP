@@ -8,6 +8,8 @@ interface Variable {
 	name: string;
 	value: string;
 	type?: string;
+	evaluateName?: string;
+	memoryReference?: string;
 	variablesReference: number;
 }
 export interface StackFrame {
@@ -28,6 +30,9 @@ export class DebuggerProxy implements vscode.Disposable {
 	
 	private _onDidStop = new vscode.EventEmitter<any>();
 	readonly onDidStop = this._onDidStop.event;
+	
+	private _output = new vscode.EventEmitter<any>();
+	readonly output = this._output.event;
 
 	constructor() {
 		this.disposables.push(
@@ -45,6 +50,7 @@ export class DebuggerProxy implements vscode.Disposable {
 					this.activeSession = session;
 					return {
 						onDidSendMessage: async (msg : any) => {
+							this._output.fire(msg);
 							if (msg.type === "event") {
 								if (msg.event === "stopped") {
 									const threadId = msg.body.threadId;
@@ -52,8 +58,7 @@ export class DebuggerProxy implements vscode.Disposable {
 									this.activeFrameID = r.stackFrames.length > 0 ? r.stackFrames[0].id : undefined;
 									const data = await this.getNowVariable();
 									this._onDidStop.fire(data);
-								} 
-								
+								}  
 							} 
 							else if (msg.type === "response") {
 								if (
@@ -81,7 +86,8 @@ export class DebuggerProxy implements vscode.Disposable {
 				if(scope.name === "Registers") return;
 				return {
 					scopeName: scope.name,
-					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0)
+					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0),
+					variablesReference: scope.variablesReference
 				};
 			}));
 
@@ -123,7 +129,10 @@ export class DebuggerProxy implements vscode.Disposable {
 				const node: any = {
 					name: v.name,
 					value: v.value,
-					type: v.type
+					type: v.type,
+					variablesReference: v.variablesReference,
+					evaluateName: v.evaluateName,
+					memoryReference: v.memoryReference
 				};
 				if (v.variablesReference > 0) {
 					node.children = await this.RecursivegetVariables({variablesReference: v.variablesReference}, dep + 1);
@@ -149,7 +158,6 @@ export class DebuggerProxy implements vscode.Disposable {
 			return [];
 		}
 	}
-	
 	public dispose(): void {
 		this.disposables.forEach(d => d.dispose());
 	}

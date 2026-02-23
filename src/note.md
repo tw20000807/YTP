@@ -1,4 +1,4 @@
-https://microsoft.github.io/debug-adapter-protocol DAP
+https://microsoft.github.io/debug-adapter-protocol
 https://github.com/hediet/vscode-debug-visualizer 
 
 

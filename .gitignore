@@ -5,3 +5,4 @@ node_modules/
 .vscode/
 test_cpp/.vscode/
 test_cpp/.YTP/
+test_cpp/*.exe
