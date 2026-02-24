@@ -180,18 +180,24 @@ body {
     color: white;
 }
 
-.block-content {
-    flex: 1;
-    overflow: auto;
-    padding: 10px;
-    position: relative;
-}
-
-/* Text Visualizer */
 .viz-text {
     font-family: Consolas, 'Courier New', monospace;
     white-space: pre-wrap;
     word-break: break-all;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box; 
+    padding: 4px; 
+    margin: 0;
+    overflow-y: auto; 
+    line-height: 1.4;
+    font-size: 13px;
+}
+.block-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
 }
 
 /* Block Toolbar Row (inserted between header and content by Manager) */

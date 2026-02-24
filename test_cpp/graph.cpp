@@ -1,10 +1,8 @@
-#include <bits/stdc++.h>
+#include<iostream>
+#include<vector>
 using namespace std;
 
 int main(){
-    cin.tie(0);
-    ios_base::sync_with_stdio(0);
-    //start here
     int N = 5;
     vector<vector<int>> adjcent_matrix(N,vector<int>(N,0));
     vector<vector<int>> adjcent_list(N);
@@ -18,6 +16,5 @@ int main(){
             }
         }
     }
-    cout << next[1];
-
+    cout << next[1] << "\n";
 }

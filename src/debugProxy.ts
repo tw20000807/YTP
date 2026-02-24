@@ -59,16 +59,6 @@ export class DebuggerProxy implements vscode.Disposable {
 									const data = await this.getNowVariable();
 									this._onDidStop.fire(data);
 								}  
-							} 
-							else if (msg.type === "response") {
-								if (
-									msg.command === "continue" ||
-									msg.command === "next" ||
-									msg.command === "stepIn" ||
-									msg.command === "stepOut"
-								) {
-									this.activeFrameID = undefined;
-								}
 							}
 						},
 					};

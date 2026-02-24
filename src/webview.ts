@@ -48,6 +48,7 @@ export class WebviewManager implements vscode.Disposable {
 			scopes: cleanScopes,
 			// Pass current watch state if needed, though frontend manages visualizers
 			watchedVariables: Array.from(this.watchedVariables) 
+			
 		});
 		
 	}
@@ -88,6 +89,7 @@ export class WebviewManager implements vscode.Disposable {
 					return;
 			}
 		}, null, this.disposables);
+
 
 		this.webviewPanel.onDidDispose(() => {
 			this.webviewPanel = undefined;
@@ -155,6 +157,8 @@ export class WebviewManager implements vscode.Disposable {
 		htmlContent = htmlContent.replace(/\{\{cspSource\}\}/g, this.webviewPanel!.webview.cspSource);
 		htmlContent = htmlContent.replace(/\{\{styleUri\}\}/g, styleUri.toString());
 		htmlContent = htmlContent.replace(/\{\{scripts\}\}/g, scriptTags);
+
+
 
 		return htmlContent;
 	}
