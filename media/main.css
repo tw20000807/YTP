@@ -5,6 +5,9 @@
     --highlight-color: #007acc;
     --text-color: #cccccc;
     --header-height: 30px;
+
+    --font-ui: Consolas, 'Courier New', monospace;
+    --font-code: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Menlo', 'Consolas', monospace;
 }
 
 body {
@@ -60,15 +63,29 @@ body {
     padding: 2px 5px;
 }
 .var-header:hover {
-    background-color: #2a2d2e;
+    background-color: #444c4f;
 }
 .var-checkbox {
+    cursor: pointer;
     margin-right: 6px;
 }
+
+
 .var-name {
-    color: #9cdcfe;
-    margin-right: 6px;
+    font-family: var(--font-ui);
+    flex: 1;
+    font-size: 13px;
+    color: #80c6f1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; 
 }
+
+
+/* .var-checkbox:checked ~ .var-name {
+    color: #00ffc8;
+} */
+
 .var-value {
     color: #ce9178;
     white-space: pre;
@@ -113,21 +130,21 @@ body {
 
 /* Visualizer Blocks */
 .block {
-    background-color: #252526;
+    background-color: #32323e;
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 5px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    min-width: 150px;
-    min-height: 80px;
+    box-shadow: 0 4px 6px rgba(69, 69, 69, 0.3);
+    min-width: 90px;
+    min-height: 60px;
     resize: both;
     overflow: hidden;
 }
 
 /* Visible resize handle */
 .block::after {
-    content: '⋰⋱';
+    content: '⋰';
     position: absolute;
     bottom: 2px;
     right: 4px;
@@ -180,24 +197,18 @@ body {
     color: white;
 }
 
+.block-content {
+    flex: 1;
+    overflow: auto;
+    padding: 10px;
+    position: relative;
+}
+
+/* Text Visualizer */
 .viz-text {
     font-family: Consolas, 'Courier New', monospace;
     white-space: pre-wrap;
     word-break: break-all;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box; 
-    padding: 4px; 
-    margin: 0;
-    overflow-y: auto; 
-    line-height: 1.4;
-    font-size: 13px;
-}
-.block-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
 }
 
 /* Block Toolbar Row (inserted between header and content by Manager) */
