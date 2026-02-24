@@ -76,8 +76,7 @@ export class DebuggerProxy implements vscode.Disposable {
 				if(scope.name === "Registers") return;
 				return {
 					scopeName: scope.name,
-					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0),
-					variablesReference: scope.variablesReference
+					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0)
 				};
 			}));
 
@@ -117,11 +116,9 @@ export class DebuggerProxy implements vscode.Disposable {
 			const arr = await this.getVariables({variablesReference: args.variablesReference});
 			return await Promise.all(arr.map(async (v : Variable) => {
 				const node: any = {
-					name: v.name,
+					name: v.evaluateName ? v.evaluateName : v.name,
 					value: v.value,
 					type: v.type,
-					variablesReference: v.variablesReference,
-					evaluateName: v.evaluateName,
 					memoryReference: v.memoryReference
 				};
 				if (v.variablesReference > 0) {
