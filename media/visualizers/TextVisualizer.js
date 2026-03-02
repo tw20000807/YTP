@@ -12,6 +12,7 @@ class TextVisualizer extends BaseVisualizer {
         this.pre.textContent = variable.value;
     }
 }
+
 if (typeof visualizerRegistry !== 'undefined') {
     visualizerRegistry.register('Text', TextVisualizer);
 }

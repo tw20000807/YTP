@@ -28,12 +28,23 @@ class VisualizerController {
         
         const splitter = document.getElementById('splitter');
         const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+
+        if (sidebar && currentState.splitPaneWidth) {
+            sidebar.style.width = `${currentState.splitPaneWidth}px`;
+        }
+        if (sidebar && currentState.sidebarCollapsed) {
+            sidebar.classList.add('collapsed');
+        }
         if (splitter && sidebar) {
             this.splitter = new ResizeHandle(
                 splitter,
                 sidebar,
                 this.saveState.bind(this)
             );
+        }
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggleSidebar());
         }
 
         this.varMap = new Map(); // path -> VariableData
@@ -73,6 +84,14 @@ class VisualizerController {
                     });
                 }
             });
+        }
+    }
+
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            this.saveState();
         }
     }
 
@@ -232,10 +251,13 @@ class VisualizerController {
 
     saveState() {
         const sidebar = document.getElementById('sidebar');
-        const sidebarWidth = sidebar ? parseInt(sidebar.style.width) : 300;
+        const sidebarWidth = sidebar ? parseInt(sidebar.style.width) || 200 : 200;
+        const isCollapsed = sidebar ? sidebar.classList.contains('collapsed') : false;
+
         const blocks = this.visualizerManager.getLayout();
         const state = {
             splitPaneWidth: sidebarWidth,
+            sidebarCollapsed: isCollapsed, 
             blocks: blocks
         };
         vscode.setState(state);

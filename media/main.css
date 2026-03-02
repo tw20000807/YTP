@@ -22,11 +22,53 @@ body {
 
 #app {
     display: flex;
-    height: 100vh;
+    position: relative;
     width: 100vw;
+    height: 100vh;
 }
 
-/* Sidebar */
+#sidebar-toggle {
+    position: absolute;
+    left: 10px;
+    top: 5px;
+    z-index: 100;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 14px;
+}
+
+#sidebar-toggle:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#sidebar {
+    width: 200px;
+    min-width: 0;
+    overflow-x: hidden;
+    transition: width 0.2s ease-in-out, opacity 0.2s;
+    background: var(--vscode-sideBar-background);
+    border-right: 1px solid var(--vscode-sideBar-border);
+}
+
+#sidebar.collapsed {
+    width: 0 !important;
+    border-right: none;
+    opacity: 0;
+    pointer-events: none;
+}
+#sidebar.collapsed + #splitter {
+    display: none;
+}
+
+#dashboard {
+    flex: 1;
+    overflow: auto;
+}
+
 #sidebar {
     width: 300px;
     background-color: var(--sidebar-bg);
@@ -185,6 +227,8 @@ body {
     gap: 5px;
 }
 
+
+
 .block-btn {
     background: none;
     border: none;
@@ -333,6 +377,93 @@ body {
 
 .viz-array-box--changed .viz-array-value {
     animation: viz-array-flash 1s ease-out forwards;
+}
+
+/* -- matrix -- */
+/* Matrix Visualizer Container */
+.viz-matrix-grid {
+    display: flex;
+    flex-direction: column; 
+    padding: 10px;
+    overflow: auto;
+    gap: 0; 
+}
+
+/* Row wrapper */
+.viz-matrix-row {
+    display: flex;
+    flex-direction: row; 
+}
+
+.viz-matrix-cell {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color);
+    margin-right: -1px;  
+    margin-bottom: -1px; 
+    min-width: 50px;
+    text-align: center;
+    font-family: monospace;
+    position: relative;
+    background-color: var(--bg-color);
+}
+
+.viz-matrix-coord {
+    background-color: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.7em;
+    padding: 1px 2px;
+    color: #888;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.viz-matrix-val {
+    padding: 6px 8px;
+    font-size: 0.9em;
+    color: var(--text-color);
+    white-space: nowrap;
+    min-height: 1.2em;
+}
+
+.viz-matrix-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--sidebar-bg);
+}
+
+.viz-matrix-control {
+    display: flex;
+    align-items: center;
+    font-size: 0.85em;
+    color: var(--text-color);
+}
+
+.viz-matrix-input {
+    width: 44px;
+    margin-left: 4px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 4px;
+    font-size: 0.9em;
+}
+
+.viz-matrix-input:focus {
+    outline: 1px solid var(--highlight-color);
+    border-color: var(--highlight-color);
+}
+
+.viz-matrix-cell--changed .viz-matrix-val {
+    animation: viz-array-flash 1s ease-out forwards;
+}
+
+.viz-matrix-cell:hover {
+    z-index: 10;
+    outline: 1px solid var(--highlight-color);
 }
 
 /* ── Graph Visualizer ───────────────────────────────────────── */

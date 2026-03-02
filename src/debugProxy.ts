@@ -114,7 +114,7 @@ export class DebuggerProxy implements vscode.Disposable {
 		}
 	}
 	public async RecursivegetVariables(args: { variablesReference: number }, dep: number): Promise<any> {
-		if (args.variablesReference === 0 || dep > 2) return [];
+		if (args.variablesReference === 0 || dep > 4) return [];
 		try {
 			const arr = await this.getVariables({variablesReference: args.variablesReference});
 			return await Promise.all(arr.map(async (v : Variable) => {
