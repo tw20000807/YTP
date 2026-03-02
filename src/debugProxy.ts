@@ -31,8 +31,11 @@ export class DebuggerProxy implements vscode.Disposable {
 	private _onDidStop = new vscode.EventEmitter<any>();
 	readonly onDidStop = this._onDidStop.event;
 	
-	private _output = new vscode.EventEmitter<any>();
-	readonly output = this._output.event;
+	// private _output = new vscode.EventEmitter<any>();
+	// readonly output = this._output.event;
+	
+	private _end = new vscode.EventEmitter<void>();
+	readonly end = this._end.event;
 
 	constructor() {
 		this.disposables.push(
@@ -43,6 +46,7 @@ export class DebuggerProxy implements vscode.Disposable {
 					this.activeSession = undefined;
 					this.activeFrameID = undefined;
 				}
+				this._end.fire();
 			}),
 			vscode.debug.onDidChangeActiveDebugSession((s: vscode.DebugSession | undefined) => {this.activeSession = s;}),
 			vscode.debug.registerDebugAdapterTrackerFactory("*", {
@@ -50,7 +54,6 @@ export class DebuggerProxy implements vscode.Disposable {
 					this.activeSession = session;
 					return {
 						onDidSendMessage: async (msg : any) => {
-							this._output.fire(msg);
 							if (msg.type === "event") {
 								if (msg.event === "stopped") {
 									const threadId = msg.body.threadId;
@@ -58,7 +61,7 @@ export class DebuggerProxy implements vscode.Disposable {
 									this.activeFrameID = r.stackFrames.length > 0 ? r.stackFrames[0].id : undefined;
 									const data = await this.getNowVariable();
 									this._onDidStop.fire(data);
-								}  
+								}
 							}
 						},
 					};

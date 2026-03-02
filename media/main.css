@@ -204,6 +204,33 @@ body {
     position: relative;
 }
 
+.viz-type-select {
+    font-size: 14px;
+    font-family: Consolas, 'Courier New', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+
+    background-color: #6f6f6f;
+    border-radius: 10px;
+
+    width: auto;
+    text-align: left;
+}
+.viz-type-select option {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 14px;
+    background-color: #fff;
+}
+.viz-type-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); 
+}
+
+.viz-type-select:hover {
+    border-color: #3b82f6; 
+    background-color: #f9fafb;
+}
+
 /* Text Visualizer */
 .viz-text {
     font-family: Consolas, 'Courier New', monospace;

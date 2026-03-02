@@ -15,7 +15,7 @@ const vscode = acquireVsCodeApi();
  * State Management
  */
 let currentState = vscode.getState() || {
-    splitPaneWidth: 300,
+    splitPaneWidth: 200,
     blocks: [] // { path: string, settings: any }[]
 };
 
@@ -230,27 +230,19 @@ class VisualizerController {
         }
     }
 
-
-
     saveState() {
         const sidebar = document.getElementById('sidebar');
         const sidebarWidth = sidebar ? parseInt(sidebar.style.width) : 300;
         const blocks = this.visualizerManager.getLayout();
-        
         const state = {
             splitPaneWidth: sidebarWidth,
             blocks: blocks
         };
-        
         vscode.setState(state);
         vscode.postMessage({ command: 'saveLayout', state: state });
     }
 }
 
-
-
-
-// Initialize with DOM ready check
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.controller = new VisualizerController();

@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-
-// Define types locally to match debugProxy behavior
 interface VariableData {
 	name: string;
 	value: string;
@@ -8,7 +6,6 @@ interface VariableData {
 	variablesReference?: number;
     children?: VariableData[];
 }
-
 interface DebugContext {
 	frameId?: number;
 	scopes: {
@@ -16,7 +13,6 @@ interface DebugContext {
 		variables: VariableData[];
 	}[];
 }
-
 export class WebviewManager implements vscode.Disposable {
 	private webviewPanel: vscode.WebviewPanel | undefined;
 	private disposables: vscode.Disposable[] = [];
@@ -26,7 +22,6 @@ export class WebviewManager implements vscode.Disposable {
 	constructor(private extensionUri: vscode.Uri) {
 		this.outputChannel = vscode.window.createOutputChannel("YTP Debugger Watch");
 	}
-
 	public async show(context: DebugContext): Promise<void> {
 		if (!this.webviewPanel) {
 			await this.createWebviewPanel();
@@ -52,7 +47,10 @@ export class WebviewManager implements vscode.Disposable {
 		});
 		
 	}
-
+	public async hide() : Promise<void> {
+		this.webviewPanel?.dispose();
+		this.webviewPanel = undefined;
+	}
 	private async createWebviewPanel(): Promise<void> {
 		this.webviewPanel = vscode.window.createWebviewPanel(
 			'ytpDebugVariables',
@@ -95,7 +93,6 @@ export class WebviewManager implements vscode.Disposable {
 			this.webviewPanel = undefined;
 		}, null, this.disposables);
 	}
-
 	private async getWebviewHtml(): Promise<string> {
 		const stylePath = vscode.Uri.joinPath(this.extensionUri, 'media', 'main.css'); // Use main.css directly
 		
@@ -162,8 +159,6 @@ export class WebviewManager implements vscode.Disposable {
 
 		return htmlContent;
 	}
-
-
 	public dispose(): void {
 		this.disposables.forEach(d => d.dispose());
 		this.webviewPanel?.dispose();
