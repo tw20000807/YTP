@@ -17,6 +17,7 @@ export class WebviewManager implements vscode.Disposable {
 	private webviewPanel: vscode.WebviewPanel | undefined;
 	private disposables: vscode.Disposable[] = [];
 	private watchedVariables: Set<string> = new Set();
+	private layoutState: any[] = []; // persisted in-memory across panel close/reopen
 	private outputChannel: vscode.OutputChannel;
 
 	constructor(private extensionUri: vscode.Uri) {
@@ -39,11 +40,10 @@ export class WebviewManager implements vscode.Disposable {
 
 		this.webviewPanel!.webview.postMessage({
 			command: 'updateVariables',
-			// Pass relevant data from DebugContext
 			scopes: cleanScopes,
-			// Pass current watch state if needed, though frontend manages visualizers
-			watchedVariables: Array.from(this.watchedVariables) 
-			
+			watchedVariables: Array.from(this.watchedVariables),
+			// Send persisted layout so the webview can restore blocks after a panel close
+			savedLayout: this.layoutState
 		});
 		
 	}
@@ -78,12 +78,9 @@ export class WebviewManager implements vscode.Disposable {
 					}
 					return;
 				case 'saveLayout':
-					// Persist layout state to workspace
-					vscode.commands.executeCommand('setContext', 'ytp.layoutState', message.state);
-					// You might want to use workspaceState Memento if available, 
-					// but passing context here is tricky without passing ExtensionContext to WebviewManager.
-					// For now, let's just log it or we can add a method to save transparently.
-					// Ideally, WebviewManager should have access to ExtensionContext.globalState or workspaceState.
+					// Keep layout in memory so it survives panel disposal and can be
+					// sent back as savedLayout on the next updateVariables message.
+					this.layoutState = (message.state && message.state.blocks) ? message.state.blocks : [];
 					return;
 			}
 		}, null, this.disposables);

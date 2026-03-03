@@ -33,6 +33,28 @@ class GraphVisualizer extends BaseVisualizer {
 
     getToolbar() { return this._toolbar; }
 
+    /** Return all toolbar states for persistence. Does NOT render. */
+    getParams() {
+        return {
+            base:     this.base,
+            limit:    this.limit,
+            format:   this.format,
+            directed: this.directed,
+            layout:   this.layout,
+            weights:  this.weights
+        };
+    }
+
+    /** Restore toolbar states. Does NOT render — caller invokes update() afterwards. */
+    setParams({ base, limit, format, directed, layout, weights } = {}) {
+        if (base    !== undefined) { this.base    = Math.max(0, parseInt(base) || 0); if (this._baseInput)  this._baseInput.value  = this.base  || ''; }
+        if (limit   !== undefined) { this.limit   = limit === null ? null : Math.max(1, parseInt(limit) || 1); if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit; }
+        if (format  !== undefined && format  !== null) { this.format   = format;   if (this._formatSel)  this._formatSel.value  = format;  this._showHideLayout(); }
+        if (directed!== undefined && directed!== null) { this.directed = directed; this._syncDirBtn(); }
+        if (layout  !== undefined && layout  !== null) { this.layout   = layout;   if (this._layoutSel)  this._layoutSel.value  = layout; }
+        if (weights !== undefined && weights !== null) { this.weights  = weights;  if (this._weightsSel) this._weightsSel.value = weights; }
+    }
+
     // ── Toolbar ───────────────────────────────────────────────────────────────
 
     _buildToolbar() {
@@ -89,7 +111,7 @@ class GraphVisualizer extends BaseVisualizer {
         toolbar.appendChild(this._layoutWrap);
 
         // Weights
-        this._mkSelect(toolbar, 'Weights', ['none', 'weighted'], (v) => {
+        this._weightsSel = this._mkSelect(toolbar, 'Weights', ['none', 'weighted'], (v) => {
             this.weights = v;
             this._renderGraph();
         });
@@ -258,45 +280,42 @@ class GraphVisualizer extends BaseVisualizer {
     // Compute canvas dimensions from node count so every node fits
     _canvasSize() {
         const n = Math.max(this._nodes.length, 1);
-        const spacing = 90;
+        const spacing = 65;
         if (this.format === 'next') {
-            // Height must accommodate the tallest arc
-            // Arc height per gap unit = ARC_STEP px; arc goes above the node row
             const ARC_STEP = 32;
             let maxGap = 0;
             for (const e of this._edges) maxGap = Math.max(maxGap, Math.abs(e.to - e.from));
-            const nodeRow   = 60;  // px from bottom for node centres
+            const nodeRow   = 50;
             const arcClear  = maxGap * ARC_STEP + 20;
-            const w = Math.max(n * spacing + 100, 400);
-            const h = Math.max(arcClear + nodeRow + 20, 180);
+            const w = Math.max(n * spacing + 60, 280);
+            const h = Math.max(arcClear + nodeRow + 20, 150);
             return { w, h };
         }
         if (this.layout === 'circle') {
-            const r    = Math.max((spacing * n) / (2 * Math.PI), 100);
-            const side = Math.ceil(r * 2 + 100);
-            return { w: Math.max(side, 400), h: Math.max(side, 300) };
+            const r    = Math.max((spacing * n) / (2 * Math.PI), 70);
+            const side = Math.ceil(r * 2 + 60);
+            return { w: Math.max(side, 280), h: Math.max(side, 220) };
         }
         if (this.layout === 'layer') {
             const byLayer      = this._computeLayers();
             const numLayers    = byLayer.size;
             const maxPerLayer  = Math.max(...[...byLayer.values()].map(a => a.length), 1);
             return {
-                w: Math.max((numLayers + 1) * 100, 400),
-                h: Math.max((maxPerLayer + 1) * 80,  300)
+                w: Math.max((numLayers + 1) * 80,  280),
+                h: Math.max((maxPerLayer + 1) * 65, 220)
             };
         }
         // spring
-        const side = Math.max(Math.ceil(Math.sqrt(n)) * spacing + 100, 400);
-        return { w: side, h: Math.max(Math.ceil(side * 0.75), 300) };
+        const side = Math.max(Math.ceil(Math.sqrt(n)) * spacing + 60, 280);
+        return { w: side, h: Math.max(Math.ceil(side * 0.75), 220) };
     }
 
     _layoutChain(w, h) {
         const n       = this._nodes.length;
-        const spacing = Math.min(90, (w - 100) / Math.max(1, n - 1));
+        const spacing = Math.min(65, (w - 60) / Math.max(1, n - 1));
         const totalW  = spacing * (n - 1);
         const ox      = (w - totalW) / 2;
-        // Place nodes near the bottom so arcs arch upward into the space above
-        const nodeY   = h - 60;
+        const nodeY   = h - 50;
         this._nodes.forEach((nd, i) => { nd.x = ox + i * spacing; nd.y = nodeY; });
     }
 
@@ -368,7 +387,7 @@ class GraphVisualizer extends BaseVisualizer {
     _layoutSpring(w, h) {
         const nodes = this._nodes;
         const n     = nodes.length;
-        const pad   = 36;
+        const pad   = 28; // clamp boundary ≈ NODE_R + a bit
 
         // Seed positions on a circle if not yet placed
         nodes.forEach((nd, i) => {
@@ -449,10 +468,11 @@ class GraphVisualizer extends BaseVisualizer {
         const NS = 'http://www.w3.org/2000/svg';
 
         const svg = document.createElementNS(NS, 'svg');
-        // Use explicit pixel dimensions so the SVG has real size from the first paint
-        svg.setAttribute('width',   w);
-        svg.setAttribute('height',  h);
+        // viewBox preserves internal coordinates; 100% lets the SVG scale to the block.
         svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('width',  '100%');
+        svg.setAttribute('height', '100%');
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         svg.setAttribute('class', 'viz-graph-svg');
         this._svgEl = svg;
 
@@ -468,7 +488,7 @@ class GraphVisualizer extends BaseVisualizer {
 
         // Node group
         const nodeGroup = document.createElementNS(NS, 'g');
-        const NODE_R = 18;
+        const NODE_R = 22;
         for (const nd of this._nodes) {
             const g = document.createElementNS(NS, 'g');
             g.setAttribute('class', 'viz-graph-node');
@@ -492,20 +512,23 @@ class GraphVisualizer extends BaseVisualizer {
         svg.appendChild(nodeGroup);
         this._svgContainer.appendChild(svg);
 
-        // Resize the parent block to fit this SVG on every render
-        this._resizeBlock();
+        // Size the parent block around the natural SVG coordinate space
+        this._resizeBlock(w, h);
     }
 
-    // Re-measure the parent .block element to fit whatever was just rendered
-    _resizeBlock() {
+    // Size the parent .block to naturalW x naturalH plus chrome (header, toolbar, padding).
+    // After initial sizing, the user can resize via the browser handle and the SVG scales.
+    _resizeBlock(naturalW, naturalH) {
         const block = this.container.closest ? this.container.closest('.block') : null;
         if (!block) return;
-        block.style.display  = 'inline-flex';
-        const w = Math.max(block.scrollWidth,  150);
-        const h = Math.max(block.scrollHeight, 80);
-        block.style.display  = 'flex';
-        block.style.width    = `${w}px`;
-        block.style.height   = `${h}px`;
+        const headerEl = block.querySelector('.block-header');
+        const headerH  = headerEl ? headerEl.offsetHeight : 30;
+        const pad      = 20; // block-content padding (10 top + 10 bottom)
+        block.style.display = 'flex';
+        block.style.width   = `${Math.max(naturalW + pad, 150)}px`;
+        block.style.height  = `${Math.max(naturalH + headerH + pad, 80)}px`;
+        // Signal Manager.autoSizeBlock to skip re-measurement for this block
+        block.dataset.vizSized = '1';
     }
 
     // ── Edge drawing (called on full render and on drag) ──────────────────────
@@ -563,7 +586,7 @@ class GraphVisualizer extends BaseVisualizer {
     // Arc height = gap * ARC_STEP so longer jumps never cross shorter ones.
     _drawChainEdge(NS, src, tgt, edge) {
         if (!src || !tgt) return;
-        const R        = 18;
+        const R        = 22;
         const ARC_STEP = 32; // must match _canvasSize
         const gap      = Math.abs(tgt.id - src.id);
         const withArrow = this.directed;
@@ -620,7 +643,7 @@ class GraphVisualizer extends BaseVisualizer {
     }
 
     _drawStraightEdge(NS, src, tgt, edge) {
-        const R   = 18;
+        const R   = 22;
         const dx  = tgt.x - src.x, dy = tgt.y - src.y;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         const nx  = dx / len,       ny = dy / len;
@@ -642,7 +665,7 @@ class GraphVisualizer extends BaseVisualizer {
      * curveDir: -1 = curve right, 0 = small left curve, 1 = curve left
      */
     _drawCurvedEdge(NS, src, tgt, curveDir, edge, withArrow) {
-        const R          = 18;
+        const R          = 22;
         const curvature  = curveDir === 0 ? 20 : 40;
         const sign       = curveDir === -1 ? -1 : 1;
         const dx  = tgt.x - src.x, dy = tgt.y - src.y;
@@ -681,7 +704,7 @@ class GraphVisualizer extends BaseVisualizer {
     }
 
     _drawSelfLoop(NS, node, edge) {
-        const R   = 18;
+        const R   = 22;
         const lx  = node.x - R * 0.7;
         const rx  = node.x + R * 0.7;
         const top = node.y - R - 28;

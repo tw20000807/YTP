@@ -12,5 +12,18 @@ class BaseVisualizer {
      * @returns {HTMLElement|null}
      */
     getToolbar() { return null; }
+    /**
+     * Return a plain object of all user-configurable state (toolbar settings).
+     * Used by Manager to persist settings across uncheck/recheck and panel restarts.
+     * @returns {Object}
+     */
+    getParams() { return {}; }
+    /**
+     * Restore state from a plain object previously returned by getParams().
+     * Should update internal state AND sync all toolbar UI controls.
+     * Must NOT trigger a render — Manager calls update() after this.
+     * @param {Object} params
+     */
+    setParams(params) {}
     dispose() {}
 }

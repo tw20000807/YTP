@@ -27,6 +27,22 @@ class ArrayVisualizer extends BaseVisualizer {
         return this._toolbar;
     }
 
+    getParams() {
+        return { base: this.base, limit: this.limit };
+    }
+
+    /** Restore state. Does NOT render — caller invokes update() afterwards. */
+    setParams({ base, limit } = {}) {
+        if (base !== undefined) {
+            this.base = Math.max(0, parseInt(base) || 0);
+            if (this._baseInput) this._baseInput.value = this.base === 0 ? '' : this.base;
+        }
+        if (limit !== undefined) {
+            this.limit = limit === null ? null : Math.max(1, parseInt(limit) || 1);
+            if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit;
+        }
+    }
+
     _buildToolbar() {
         const toolbar = document.createElement('div');
 

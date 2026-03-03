@@ -99,6 +99,13 @@ class VisualizerController {
         const message = event.data;
         switch (message.command) {
             case 'updateVariables':
+                // On a fresh panel (vscode.getState() had no blocks), seed from extension-side savedLayout.
+                // This bridges the gap when the panel was closed and re-created.
+                if (message.savedLayout && message.savedLayout.length > 0) {
+                    if (!currentState.blocks || currentState.blocks.length === 0) {
+                        currentState.blocks = message.savedLayout;
+                    }
+                }
                 this.populateVarMap(message.scopes);
                 this.renderVariableList(message.scopes);
                 this.visualizerManager.updateAll(this.varMap);
