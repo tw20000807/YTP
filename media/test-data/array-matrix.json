@@ -1,0 +1,69 @@
+{
+  "frameId": 1,
+  "scopes": [
+    {
+      "name": "Locals",
+      "variables": [
+        {
+          "single": "numbers",
+          "name": "numbers",
+          "value": "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+          "type": "std::vector<int>",
+          "children": [
+            { "single": "[0]", "name": "numbers[0]", "value": "1", "type": "int" },
+            { "single": "[1]", "name": "numbers[1]", "value": "2", "type": "int" },
+            { "single": "[2]", "name": "numbers[2]", "value": "3", "type": "int" },
+            { "single": "[3]", "name": "numbers[3]", "value": "4", "type": "int" },
+            { "single": "[4]", "name": "numbers[4]", "value": "5", "type": "int" },
+            { "single": "[5]", "name": "numbers[5]", "value": "6", "type": "int" },
+            { "single": "[6]", "name": "numbers[6]", "value": "7", "type": "int" },
+            { "single": "[7]", "name": "numbers[7]", "value": "8", "type": "int" },
+            { "single": "[8]", "name": "numbers[8]", "value": "9", "type": "int" },
+            { "single": "[9]", "name": "numbers[9]", "value": "10", "type": "int" }
+          ]
+        },
+        {
+          "single": "matrix",
+          "name": "matrix",
+          "value": "[[1,2,3],[4,5,6],[7,8,9]]",
+          "type": "std::vector<std::vector<int>>",
+          "children": [
+            {
+              "single": "[0]",
+              "name": "matrix[0]",
+              "value": "[1, 2, 3]",
+              "type": "std::vector<int>",
+              "children": [
+                { "single": "[0]", "name": "matrix[0][0]", "value": "1", "type": "int" },
+                { "single": "[1]", "name": "matrix[0][1]", "value": "2", "type": "int" },
+                { "single": "[2]", "name": "matrix[0][2]", "value": "3", "type": "int" }
+              ]
+            },
+            {
+              "single": "[1]",
+              "name": "matrix[1]",
+              "value": "[4, 5, 6]",
+              "type": "std::vector<int>",
+              "children": [
+                { "single": "[0]", "name": "matrix[1][0]", "value": "4", "type": "int" },
+                { "single": "[1]", "name": "matrix[1][1]", "value": "5", "type": "int" },
+                { "single": "[2]", "name": "matrix[1][2]", "value": "6", "type": "int" }
+              ]
+            },
+            {
+              "single": "[2]",
+              "name": "matrix[2]",
+              "value": "[7, 8, 9]",
+              "type": "std::vector<int>",
+              "children": [
+                { "single": "[0]", "name": "matrix[2][0]", "value": "7", "type": "int" },
+                { "single": "[1]", "name": "matrix[2][1]", "value": "8", "type": "int" },
+                { "single": "[2]", "name": "matrix[2][2]", "value": "9", "type": "int" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

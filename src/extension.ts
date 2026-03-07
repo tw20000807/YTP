@@ -6,8 +6,25 @@ export function activate(context: vscode.ExtensionContext) {
 	const webviewManager = new WebviewManager(context.extensionUri);
 	const debugProxy = new DebuggerProxy();
 	
-	debugProxy.onDidStop(async (variables) => {
+
+	// debug-start
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders) return;
+	const folderName = '.YTP'; 
+	const folderUri = vscode.Uri.joinPath(workspaceFolders[0].uri, folderName);
+	const debugFileUri = vscode.Uri.joinPath(folderUri, 'debug_log.txt');
+
+	debugProxy.onDidDataChanged(async (variables) => {
 		webviewManager.show(variables);
+		
+		//debug-start
+		try{
+			const debugContent = new TextEncoder().encode(JSON.stringify(variables, null, 2));
+        	await vscode.workspace.fs.writeFile(debugFileUri, debugContent);
+		}
+		catch (e) {
+			console.error("Failed to write log:", e);
+		}
 	});
 	debugProxy.end(async () => {
 		if (webviewManager) {
@@ -21,3 +38,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+

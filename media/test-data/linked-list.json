@@ -1,0 +1,52 @@
+{
+  "frameId": 1,
+  "scopes": [
+    {
+      "name": "Locals",
+      "variables": [
+        {
+          "single": "head",
+          "name": "head",
+          "value": "0x7ffeefbff5a0",
+          "type": "ListNode*",
+          "children": [
+            { "single": "val", "name": "head->val", "value": "1", "type": "int" },
+            {
+              "single": "next",
+              "name": "head->next",
+              "value": "0x7ffeefbff5b0",
+              "type": "ListNode*",
+              "children": [
+                { "single": "val", "name": "head->next->val", "value": "2", "type": "int" },
+                {
+                  "single": "next",
+                  "name": "head->next->next",
+                  "value": "0x7ffeefbff5c0",
+                  "type": "ListNode*",
+                  "children": [
+                    { "single": "val", "name": "head->next->next->val", "value": "3", "type": "int" },
+                    {
+                      "single": "next",
+                      "name": "head->next->next->next",
+                      "value": "0x7ffeefbff5d0",
+                      "type": "ListNode*",
+                      "children": [
+                        { "single": "val", "name": "head->next->next->next->val", "value": "4", "type": "int" },
+                        {
+                          "single": "next",
+                          "name": "head->next->next->next->next",
+                          "value": "0x0",
+                          "type": "ListNode*"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

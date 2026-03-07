@@ -6,10 +6,12 @@ class MatrixVisualizer extends BaseVisualizer {
         super(container);
         this.rowBase = 0;
         this.colBase = 0;
-        this.rowLimit = null; 
-        this.colLimit = null;
+        this.rowLimit = null; // null = show all (inclusive end row)
+        this.colLimit = null; // null = show all (inclusive end col)
         this.variable = null;
-        this._prevValues = new Map(); 
+        this._prevValues = new Map();
+        this._dynCellW = null;  // set by onContainerResize
+        this._dynCellH = null; 
 
         this.matrixContainer = document.createElement('div');
         this.matrixContainer.className = 'viz-matrix-grid';
@@ -31,7 +33,7 @@ class MatrixVisualizer extends BaseVisualizer {
             this._render();
         });
         this._createControl(toolbar, 'Row Limit', 'all', (val) => {
-            this.rowLimit = val === '' || val === 'all' ? null : Math.max(1, parseInt(val) || 1);
+            this.rowLimit = val === '' || val === 'all' ? null : Math.max(0, parseInt(val) || 0);
             this._render();
         });
 
@@ -40,7 +42,7 @@ class MatrixVisualizer extends BaseVisualizer {
             this._render();
         });
         this._createControl(toolbar, 'Col Limit', 'all', (val) => {
-            this.colLimit = val === '' || val === 'all' ? null : Math.max(1, parseInt(val) || 1);
+            this.colLimit = val === '' || val === 'all' ? null : Math.max(0, parseInt(val) || 0);
             this._render();
         });
 
@@ -51,8 +53,9 @@ class MatrixVisualizer extends BaseVisualizer {
         const group = document.createElement('div');
         group.className = 'viz-matrix-control';
 
-        const label = document.createElement('label');
-        label.textContent = labelText + ': ';
+        const span = document.createElement('span');
+        span.className = 'viz-ctrl-label';
+        span.textContent = labelText + ': ';
 
         const input = document.createElement('input');
         input.type = 'number';
@@ -61,8 +64,8 @@ class MatrixVisualizer extends BaseVisualizer {
         input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('change', (e) => onChange(e.target.value));
 
-        label.appendChild(input);
-        group.appendChild(label);
+        group.appendChild(span);
+        group.appendChild(input);
         toolbar.appendChild(group);
     }
 
@@ -81,6 +84,43 @@ class MatrixVisualizer extends BaseVisualizer {
         this._render();
     }
 
+    /** Called by Manager when the block is resized. Adjusts cell size to fill the available space. */
+    onContainerResize(w, h) {
+        if (!this.variable || !this.variable.children) return;
+
+        const rows = this.variable.children;
+        if (rows.length === 0) return;
+
+        const rStart = Math.min(Math.max(0, this.rowBase), rows.length - 1);
+        const rEnd = this.rowLimit === null
+            ? rows.length - 1
+            : Math.min(Math.max(0, this.rowLimit), rows.length - 1);
+        if (rEnd < rStart) return;
+        const numRows = rEnd - rStart + 1;
+
+        // Use max visible column count (not only first row), otherwise wider rows overflow.
+        const cStart = Math.max(0, this.colBase);
+        let numCols = 0;
+        for (let r = rStart; r <= rEnd; r++) {
+            const row = rows[r];
+            const cols = (row && row.children) ? row.children : [];
+            if (cols.length === 0) continue;
+            const cEnd = this.colLimit === null
+                ? cols.length - 1
+                : Math.min(Math.max(0, this.colLimit), cols.length - 1);
+            if (cEnd < cStart) continue;
+            numCols = Math.max(numCols, cEnd - cStart + 1);
+        }
+        if (numCols <= 0) return;
+
+        if (w && w > 0) this._dynCellW = Math.floor(w / numCols);
+        if (h && h > 0) this._dynCellH = Math.floor(h / numRows);
+
+        const fontScale = Math.max(0.5, Math.min(1.2, Math.min(this._dynCellW, this._dynCellH) / 42));
+        this.matrixContainer.style.fontSize = `${fontScale}em`;
+        this._render();
+    }
+
     _render() {
         this.matrixContainer.innerHTML = '';
 
@@ -90,10 +130,13 @@ class MatrixVisualizer extends BaseVisualizer {
         }
 
         const rows = this.variable.children;
-        const rStart = this.rowBase;
-        const rEnd = this.rowLimit === null ? rows.length : Math.min(rows.length, rStart + this.rowLimit);
+        const rStart = Math.min(Math.max(0, this.rowBase), Math.max(0, rows.length - 1));
+        const rEnd = this.rowLimit === null
+            ? rows.length - 1
+            : Math.min(Math.max(0, this.rowLimit), Math.max(0, rows.length - 1));
+        if (rEnd < rStart) return;
 
-        for (let r = rStart; r < rEnd; r++) {
+        for (let r = rStart; r <= rEnd; r++) {
             const rowData = rows[r];
             if (!rowData.children) continue;
 
@@ -101,10 +144,13 @@ class MatrixVisualizer extends BaseVisualizer {
             rowElement.className = 'viz-matrix-row';
 
             const cols = rowData.children;
-            const cStart = this.colBase;
-            const cEnd = this.colLimit === null ? cols.length : Math.min(cols.length, cStart + this.colLimit);
+            const cStart = Math.max(0, this.colBase);
+            const cEnd = this.colLimit === null
+                ? cols.length - 1
+                : Math.min(Math.max(0, this.colLimit), cols.length - 1);
+            if (cEnd < cStart) continue;
 
-            for (let c = cStart; c < cEnd; c++) {
+            for (let c = cStart; c <= cEnd; c++) {
                 const cellData = cols[c];
                 const cell = document.createElement('div');
                 
@@ -112,6 +158,17 @@ class MatrixVisualizer extends BaseVisualizer {
                 const changed = this._prevValues.has(key) && this._prevValues.get(key) !== cellData.value;
                 
                 cell.className = 'viz-matrix-cell' + (changed ? ' viz-matrix-cell--changed' : '');
+
+                // Apply dynamic dimensions determined by onContainerResize
+                if (this._dynCellW) {
+                    const w = `${this._dynCellW}px`;
+                    cell.style.width = w;
+                    cell.style.flex = `0 0 ${w}`;
+                }
+                if (this._dynCellH) {
+                    const h = `${this._dynCellH}px`;
+                    cell.style.height = h;
+                }
                 
                 cell.innerHTML = `
                     <div class="viz-matrix-coord">(${r},${c})</div>

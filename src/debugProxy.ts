@@ -28,8 +28,8 @@ export class DebuggerProxy implements vscode.Disposable {
 	public activeSession: vscode.DebugSession | undefined;
 	public activeFrameID: number | undefined;
 	
-	private _onDidStop = new vscode.EventEmitter<any>();
-	readonly onDidStop = this._onDidStop.event;
+	private _onDidDataChanged = new vscode.EventEmitter<any>();
+	readonly onDidDataChanged = this._onDidDataChanged.event;
 	
 	// private _output = new vscode.EventEmitter<any>();
 	// readonly output = this._output.event;
@@ -39,7 +39,7 @@ export class DebuggerProxy implements vscode.Disposable {
 
 	constructor() {
 		this.disposables.push(
-			this._onDidStop,
+			this._onDidDataChanged,
 			vscode.debug.onDidStartDebugSession((s: vscode.DebugSession) => {this.activeSession = s;}),
 			vscode.debug.onDidTerminateDebugSession((s: vscode.DebugSession) => {
 				if(this.activeSession?.id === s.id) {
@@ -60,7 +60,7 @@ export class DebuggerProxy implements vscode.Disposable {
 									const r = await this.getStackTrace({threadId});
 									this.activeFrameID = r.stackFrames.length > 0 ? r.stackFrames[0].id : undefined;
 									const data = await this.getNowVariable();
-									this._onDidStop.fire(data);
+									this._onDidDataChanged.fire(data);
 								}
 							}
 						},
@@ -114,7 +114,8 @@ export class DebuggerProxy implements vscode.Disposable {
 		}
 	}
 	public async RecursivegetVariables(args: { variablesReference: number }, dep: number): Promise<any> {
-		if (args.variablesReference === 0 || dep > 4) return [];
+		// if (args.variablesReference === 0 || dep > 4) return [];
+		if (args.variablesReference === 0) return [];
 		try {
 			const arr = await this.getVariables({variablesReference: args.variablesReference});
 			return await Promise.all(arr.map(async (v : Variable) => {
@@ -124,6 +125,7 @@ export class DebuggerProxy implements vscode.Disposable {
 					type: v.type,
 					memoryReference: v.memoryReference
 				};
+				if(v.value == "0x0") return node; // avoid infinite loop caused by null pointer
 				if (v.variablesReference > 0) {
 					node.children = await this.RecursivegetVariables({variablesReference: v.variablesReference}, dep + 1);
 				}

@@ -5,9 +5,11 @@ class ArrayVisualizer extends BaseVisualizer {
     constructor(container) {
         super(container);
         this.base = 0;
-        this.limit = null; // null = show all
+        this.limit = null; // null = show all (inclusive end index)
         this.variable = null;
         this._prevValues = new Map(); // index -> previous value string
+        this._dynBoxW = null; // dynamic box width set by onContainerResize
+        this._dynBoxH = null; // dynamic box height set by onContainerResize
 
         // Content area: connected boxes
         this.arrayBoxContainer = document.createElement('div');
@@ -38,7 +40,7 @@ class ArrayVisualizer extends BaseVisualizer {
             if (this._baseInput) this._baseInput.value = this.base === 0 ? '' : this.base;
         }
         if (limit !== undefined) {
-            this.limit = limit === null ? null : Math.max(1, parseInt(limit) || 1);
+            this.limit = limit === null ? null : Math.max(0, parseInt(limit) || 0);
             if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit;
         }
     }
@@ -52,7 +54,7 @@ class ArrayVisualizer extends BaseVisualizer {
         });
 
         this._limitInput = this._createControl(toolbar, 'Limit', '', (val) => {
-            this.limit = val === '' ? null : Math.max(1, parseInt(val) || 1);
+            this.limit = val === '' ? null : Math.max(0, parseInt(val) || 0);
             this._render();
         });
 
@@ -63,8 +65,9 @@ class ArrayVisualizer extends BaseVisualizer {
         const group = document.createElement('div');
         group.className = 'viz-array-control';
 
-        const label = document.createElement('label');
-        label.textContent = labelText + ': ';
+        const span = document.createElement('span');
+        span.className = 'viz-ctrl-label';
+        span.textContent = labelText + ': ';
 
         const input = document.createElement('input');
         input.type = 'number';
@@ -75,8 +78,8 @@ class ArrayVisualizer extends BaseVisualizer {
         input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('change', (e) => onChange(e.target.value));
 
-        label.appendChild(input);
-        group.appendChild(label);
+        group.appendChild(span);
+        group.appendChild(input);
         toolbar.appendChild(group);
         return input;
     }
@@ -88,6 +91,52 @@ class ArrayVisualizer extends BaseVisualizer {
             this.variable.children.forEach((c, i) => this._prevValues.set(i, c.value));
         }
         this.variable = variable;
+        this._render();
+    }
+
+    _rangeBounds(total) {
+        const start = Math.min(Math.max(0, this.base), Math.max(0, total - 1));
+        const end = this.limit === null
+            ? Math.max(0, total - 1)
+            : Math.min(Math.max(0, this.limit), Math.max(0, total - 1));
+        return { start, end };
+    }
+
+    /** Called by Manager when the block is resized by the user. */
+    onContainerResize(w, h) {
+        if (!w || w <= 0 || !h || h <= 0) return;
+        const children = this.variable && this.variable.children ? this.variable.children : [];
+        if (children.length === 0) return;
+
+        const { start, end } = this._rangeBounds(children.length);
+        if (end < start) return;
+        const N = end - start + 1;
+
+        // viz-array-container has no padding
+        const availW = w;
+        const availH = h;
+
+        // Pure optimizer: maximize min(h/rows, w/ceil(N/rows)) over rows in [1, N].
+        const BOX_H = 52;
+        let bestRows = 1;
+        let bestScore = -Infinity;
+        for (let rows = 1; rows <= N; rows++) {
+            const cols = Math.ceil(N / rows);
+            const score = Math.min(availH / rows, availW / cols);
+            if (score > bestScore || (Math.abs(score - bestScore) < 1e-9 && rows < bestRows)) {
+                bestScore = score;
+                bestRows = rows;
+            }
+        }
+
+        const targetCols = Math.ceil(N / bestRows);
+        const boxW = Math.floor((availW + targetCols - 1) / targetCols);
+        const boxH = Math.floor(availH / bestRows);
+        this._dynBoxW = `${boxW}px`;
+        this._dynBoxH = `${boxH}px`;
+
+        const fontScale = Math.max(0.55, Math.min(1.25, Math.min(boxW, boxH) / 44));
+        this.arrayBoxContainer.style.fontSize = `${fontScale}em`;
         this._render();
     }
 
@@ -103,18 +152,23 @@ class ArrayVisualizer extends BaseVisualizer {
         }
 
         const children = this.variable.children;
-        const start = this.base;
-        // If limit is null (empty input), show the entire array from base
-        const end = this.limit === null
-            ? children.length
-            : Math.min(children.length, start + this.limit);
+        const { start, end } = this._rangeBounds(children.length);
+        if (end < start) return;
 
-        for (let i = start; i < end; i++) {
+        for (let i = start; i <= end; i++) {
             const child = children[i];
 
             const box = document.createElement('div');
             const changed = this._prevValues.size > 0 && this._prevValues.get(i) !== child.value;
             box.className = 'viz-array-box' + (changed ? ' viz-array-box--changed' : '');
+            // Apply dynamic width determined by onContainerResize
+            if (this._dynBoxW) {
+                box.style.width = this._dynBoxW;
+                box.style.flex = `0 0 ${this._dynBoxW}`;
+            }
+            if (this._dynBoxH) {
+                box.style.height = this._dynBoxH;
+            }
 
             const indexEl = document.createElement('div');
             indexEl.className = 'viz-array-index';

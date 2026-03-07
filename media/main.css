@@ -158,7 +158,6 @@ body {
     background-color: var(--bg-color);
     overflow: auto;
     position: relative; /* Container for absolute positioned blocks */
-    padding: 10px;
     min-height: 100%;
 }
 
@@ -246,7 +245,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: auto;
-    padding: 10px;
+    padding: 0;          /* content fills the block edge-to-edge; visualizers add their own padding */
     position: relative;
     min-height: 0; /* allow flex children to shrink below content size */
 }
@@ -256,6 +255,7 @@ body {
     font-family: Consolas, 'Courier New', monospace;
     white-space: pre-wrap;
     word-break: break-all;
+    padding: 8px 10px;   /* compensate for removed block-content padding */
 }
 
 /* Popup-open highlight */
@@ -302,30 +302,60 @@ body {
 }
 
 /* Toolbar inside popup: vertical stack, no block chrome */
+/* Popup toolbar: CSS grid so every label-colon aligns in col 1, control in col 2 */
 .block-popup .block-toolbar {
+    display: grid !important;
+    grid-template-columns: max-content 1fr;
+    row-gap: 4px;
+    column-gap: 8px;
+    align-items: center;
     border: none;
     padding: 0;
     background: transparent;
-    flex-direction: column;
-    gap: 6px;
 }
 
-/* Inside the popup, controls must size to their content — not shrink to 0 */
+/* Each control group becomes transparent to the grid — label and input become
+   direct grid children and therefore share the same two-column track. */
 .block-popup .viz-graph-control,
-.block-popup .viz-array-control {
-    flex: 0 0 auto;
-    width: auto;
+.block-popup .viz-array-control,
+.block-popup .viz-matrix-control {
+    display: contents;
 }
+
+/* Wrapper divs that hold a single control (e.g. _layoutWrap, _rootWrap)
+   also become transparent to the grid when visible. */
+.block-popup .viz-toolbar-wrap {
+    display: contents;
+}
+
+/* Col 1: label + colon, right-aligned so colons form a vertical line */
+.viz-ctrl-label {
+    white-space: nowrap;
+    text-align: right;
+    color: var(--text-color);
+    font-size: 0.85em;
+    align-self: center;
+}
+
+/* Col 2: controls fill the available track width */
 .block-popup .viz-graph-select,
-.block-popup .viz-array-input {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 80px;
+.block-popup .viz-array-input,
+.block-popup .viz-matrix-input {
+    width: 100%;
+    min-width: 60px;
+    box-sizing: border-box;
+    flex: unset;
 }
 .block-popup .viz-graph-toggle {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 60px;
+    width: 100%;
+    box-sizing: border-box;
+    flex: unset;
+    min-width: unset;
+}
+
+/* Hidden wrapper: none wins even when viz-toolbar-wrap says contents */
+.viz-toolbar-hidden {
+    display: none !important;
 }
 
 /* Block Toolbar Row (inserted between header and content by Manager) */
@@ -349,20 +379,13 @@ body {
     align-items: center;
     font-size: 0.85em;
     color: var(--text-color);
-}
-
-.viz-array-control label {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    white-space: nowrap;
+    gap: 4px;
 }
 
 .viz-array-input {
     flex: 1;                 /* fill remaining label width */
     min-width: 24px;
     width: 0;                /* override browser default so flex: 1 can shrink below it */
-    margin-left: 4px;
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
@@ -380,16 +403,15 @@ body {
     flex-direction: row;
     flex-wrap: wrap;          /* boxes wrap to new rows when block is narrow */
     align-content: flex-start;
-    padding: 10px;
     /* No overflow:auto here — let boxes wrap instead of scroll */
 }
 
 .viz-array-box {
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
     border: 1px solid var(--border-color);
     margin-right: -1px; /* collapse adjacent borders for connected look */
-    min-width: 44px;
     text-align: center;
     font-family: monospace;
     position: relative;
@@ -419,6 +441,9 @@ body {
     padding: 5px 6px;
     background-color: var(--bg-color);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .viz-array-empty {
@@ -427,14 +452,13 @@ body {
     padding: 10px;
 }
 
-@keyframes viz-array-flash {
-    0%   { background-color: #b8860b; }
-    60%  { background-color: #b8860b; }
-    100% { background-color: var(--bg-color); }
+.viz-array-box--changed {
+    box-shadow: none;
 }
 
-.viz-array-box--changed .viz-array-value {
-    animation: viz-array-flash 1s ease-out forwards;
+.viz-array-box--changed .viz-array-index {
+    background-color: #b8860b;
+    color: #1e1e1e;
 }
 
 /* -- matrix -- */
@@ -442,7 +466,10 @@ body {
 .viz-matrix-grid {
     display: flex;
     flex-direction: column; 
-    padding: 10px;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    box-sizing: border-box;
     overflow: auto;
     gap: 0; 
 }
@@ -456,10 +483,11 @@ body {
 .viz-matrix-cell {
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
     border: 1px solid var(--border-color);
     margin-right: -1px;  
     margin-bottom: -1px; 
-    min-width: 50px;
     text-align: center;
     font-family: monospace;
     position: relative;
@@ -481,6 +509,9 @@ body {
     font-size: 0.9em;
     color: var(--text-color);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     min-height: 1.2em;
 }
 
@@ -515,8 +546,9 @@ body {
     border-color: var(--highlight-color);
 }
 
-.viz-matrix-cell--changed .viz-matrix-val {
-    animation: viz-array-flash 1s ease-out forwards;
+.viz-matrix-cell--changed {
+    box-shadow: inset 0 0 0 2px #b8860b;
+    z-index: 2;
 }
 
 .viz-matrix-cell:hover {
@@ -569,6 +601,16 @@ body {
     stroke-width: 1.5px;
 }
 
+.viz-graph-edge--new {
+    stroke: #b8860b;
+    stroke-width: 1.5px;
+}
+
+.viz-graph-node--new circle {
+    stroke: #b8860b;
+    stroke-width: 1.5px;
+}
+
 .viz-graph-edge-label {
     fill: #a0c4e8;
     font-family: Consolas, 'Courier New', monospace;
@@ -584,20 +626,13 @@ body {
     align-items: center;
     font-size: 0.85em;
     color: var(--text-color);
-}
-
-.viz-graph-control label {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    white-space: nowrap;
+    gap: 4px;
 }
 
 .viz-graph-select {
     flex: 1;                 /* fill remaining label width */
     min-width: 36px;
     width: 0;                /* allow shrinking below browser default */
-    margin-left: 4px;
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
@@ -628,3 +663,123 @@ body {
     border-color: #6e9ccf;
     color: #d4e8ff;
 }
+
+/* ── Copy-image button in popup type row ──────────────────────────────── */
+.block-copy-btn {
+    margin-left: auto;
+    font-size: 13px;
+    padding: 1px 5px;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.block-copy-btn:hover { background: #3a3a4a; color: white; }
+
+/* ── Linked-List Visualizer ───────────────────────────────────────────── */
+
+/* Node rect */
+.viz-ll-node-rect {
+    fill: #1e3a5f;
+    stroke: #6e9ccf;
+    stroke-width: 1.5px;
+}
+.viz-graph-node:hover .viz-ll-node-rect {
+    fill: #2a5080;
+}
+
+/* Node ID text (header line) */
+.viz-ll-node-id {
+    fill: #d4e8ff;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Data row text */
+.viz-ll-node-text {
+    fill: #c8dff8;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Separator line between header and data */
+.viz-ll-node-sep {
+    stroke: #6e9ccf;
+    stroke-width: 0.8px;
+}
+
+/* Toolbar sections */
+.viz-ll-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-color);
+}
+
+.viz-ll-section-title {
+    font-size: 0.78em;
+    color: #888;
+    user-select: none;
+    padding: 0;
+}
+
+.viz-ll-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.viz-ll-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.viz-ll-input {
+    flex: 1;
+    min-width: 0;
+    width: 0;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 4px;
+    font-size: 0.85em;
+}
+.viz-ll-nick-input {
+    max-width: 80px;
+}
+.viz-ll-input:focus {
+    outline: 1px solid var(--highlight-color);
+    border-color: var(--highlight-color);
+}
+
+.viz-ll-add-btn {
+    align-self: flex-start;
+    background: none;
+    border: 1px dashed var(--border-color);
+    color: #888;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+.viz-ll-add-btn:hover { color: var(--text-color); border-color: var(--text-color); }
+
+.viz-ll-remove-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 3px;
+    flex-shrink: 0;
+}
+.viz-ll-remove-btn:hover { color: #e07070; }

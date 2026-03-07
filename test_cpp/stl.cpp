@@ -9,10 +9,10 @@ int main(){
     multiset< int > ms;
     bitset<10> bs;
     for(int i = 0; i < 10; ++i) {
-        s.insert(i + 1);
-        ms.insert(i+1);ms.insert(i+1);
-        mp[i] = i;
-        bs.set(i);
+        s.insert(i*i);
+        ms.insert(i+1);ms.insert(i*i);
+        mp[i] = i*i;
+        bs.set(i*i);
     }
     
     cout << s.size() << " " << *s.begin() << "\n";
