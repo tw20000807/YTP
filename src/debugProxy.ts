@@ -121,6 +121,7 @@ export class DebuggerProxy implements vscode.Disposable {
 			return await Promise.all(arr.map(async (v : Variable) => {
 				const node: any = {
 					name: v.evaluateName ? v.evaluateName : v.name,
+					// name: v.evaluateName ? v.evaluateName.replace(/[()]/g, '') : v.name,
 					value: v.value,
 					type: v.type,
 					memoryReference: v.memoryReference

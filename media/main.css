@@ -374,30 +374,36 @@ body {
 /* Array Visualizer */
 .viz-array-control {
     display: flex;
-    flex: 1 1 auto;          /* grow to fill toolbar row */
-    min-width: 0;
     align-items: center;
-    font-size: 0.85em;
-    color: var(--text-color);
-    gap: 4px;
+    justify-content: flex-start;
+    gap: 4px; 
+    margin-bottom: 4px; 
 }
-
+.viz-ctrl-label {
+    font-size: 0.78em;
+    color: #888;
+    user-select: none;
+    text-align: left;
+}
 .viz-array-input {
-    flex: 1;                 /* fill remaining label width */
-    min-width: 24px;
-    width: 0;                /* override browser default so flex: 1 can shrink below it */
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
-    padding: 1px 4px;
-    font-size: 0.9em;
+    padding: 1px 4px; 
+    font-size: 0.85em; 
+    width: 60px;      
+    outline: none;
+    border-radius: 0;  
 }
-
 .viz-array-input:focus {
     outline: 1px solid var(--highlight-color);
     border-color: var(--highlight-color);
 }
-
+.viz-array-input::-webkit-inner-spin-button,
+.viz-array-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 .viz-array-container {
     display: flex;
     flex-direction: row;
@@ -460,7 +466,23 @@ body {
     background-color: #b8860b;
     color: #1e1e1e;
 }
+/* -----------modify----------- */
 
+/* 當這個 Index 上面有指標 (Pointer) 時的強化樣式 */
+.viz-array-index--pointer {
+    color: #ffd700; /* 變成亮眼的金色 */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); /* 增加一點點發光感 */
+    transform: scale(1.1); /* 稍微放大一點點 */
+}
+
+
+/* 當 Index 被標註時，格子的邊框也可以跟著變色 */
+.viz-array-index--pointer + .viz-array-value {
+    color: #fff;
+}
+
+/* --------------------- */
 /* -- matrix -- */
 /* Matrix Visualizer Container */
 .viz-matrix-grid {
@@ -783,3 +805,83 @@ body {
     flex-shrink: 0;
 }
 .viz-ll-remove-btn:hover { color: #e07070; }
+
+
+/* ---------------------- bar */
+.viz-bar-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    background: #ffffff;
+    box-sizing: border-box;
+    font-family: sans-serif;
+}
+
+.viz-bar-unit {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin: 0 1px;
+    height: 100%;
+}
+
+.viz-bar-value {
+    font-size: 9px;
+    color: #888;
+    text-align: center;
+    height: 14px;
+    line-height: 14px;
+}
+
+.viz-bar-wrapper {
+    flex: 1;
+    position: relative;
+    background: #fcfcfc;
+    border-left: 1px solid #f0f0f0;
+}
+
+.viz-zero-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #ccc;
+    z-index: 1;
+}
+
+.viz-bar-inner {
+    position: absolute;
+    left: 15%;
+    width: 70%;
+    transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                bottom 0.3s ease, 
+                top 0.3s ease, 
+                background-color 0.3s;
+    z-index: 2;
+}
+
+.viz-bar-inner.pos { background: #3498db; }
+.viz-bar-inner.neg { background: #e67e22; }
+
+.viz-bar-inner.changed {
+    filter: brightness(1.2) saturate(1.2);
+    box-shadow: 0 0 6px rgba(0,0,0,0.15);
+    animation: viz-pulse 0.4s ease;
+}
+
+.viz-bar-index {
+    font-size: 10px;
+    font-weight: bold;
+    color: #444;
+    text-align: center;
+    height: 18px;
+    line-height: 18px;
+    border-top: 2px solid #eee;
+    margin-top: 2px;
+}
+
+@keyframes viz-pulse {
+    0% { opacity: 0.6; }
+    100% { opacity: 1; }
+}

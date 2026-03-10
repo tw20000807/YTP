@@ -5,7 +5,7 @@ class BaseVisualizer {
     constructor(container) {
         this.container = container;
     }
-    update(variable) {}
+    update(variable, AllVariable = null) {}
     /**
      * Override to return a DOM element that will be inserted as a toolbar row
      * between the block header and block content. Return null for no toolbar.
