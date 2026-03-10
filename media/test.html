@@ -7,6 +7,31 @@
     <link href="main.css" rel="stylesheet">
     <link href="webview.css" rel="stylesheet">
     <style>
+        /* Simulate VS Code Theme Variables */
+        :root {
+            --vscode-editor-background: #1e1e1e;
+            --vscode-editor-foreground: #d4d4d4;
+            --vscode-sideBar-background: #252526;
+            --vscode-sideBar-foreground: #cccccc;
+            --vscode-sideBarTitle-foreground: #bbbbbb;
+            --vscode-button-secondaryBackground: #3a3d41;
+            --vscode-button-secondaryForeground: #ffffff;
+            --vscode-button-secondaryHoverBackground: #45494e;
+            --vscode-input-background: #3c3c3c;
+            --vscode-input-foreground: #cccccc;
+            --vscode-input-border: #3c3c3c;
+            --vscode-focusBorder: #007fd4;
+            --vscode-foreground: #cccccc;
+            --vscode-editorWidget-background: #252526;
+            --vscode-editorWidget-border: #454545;
+        }
+        body.vscode-light {
+            --vscode-editor-background: #ffffff;
+            --vscode-editor-foreground: #000000;
+            /* Add light mode variables if needed */
+        }
+    </style>
+    <style>
         /* Test harness specific styles */
         #test-controls {
             position: fixed;
@@ -97,7 +122,7 @@
         #test-controls.minimized h2 { margin: 0; padding: 0; border: none; font-size: 12px; }
     </style>
 </head>
-<body>
+<body class="vscode-dark">
     <div id="app">
         <button id="sidebar-toggle" title="Toggle Sidebar">☰</button>
 
@@ -133,6 +158,10 @@
             <option value="json-text">JSON & Text</option>
         </select>
         
+        <h3>Load .YTP File</h3>
+        <input type="file" id="ytp-file-input" accept=".txt,.json" multiple>
+        <button id="load-file-btn">Load Selected File(s)</button>
+
         <h3>Custom JSON</h3>
         <textarea id="json-input" placeholder='Paste JSON here...
 {
@@ -168,6 +197,7 @@
     <script src="utils/ResizeHandle.js"></script>
     <script src="core/Registry.js"></script>
     <script src="visualizers/BaseVisualizer.js"></script>
+    <script src="visualizers/GraphBaseVisualizer.js"></script>
     <script src="visualizers/TextVisualizer.js"></script>
     <script src="visualizers/JsonVisualizer.js"></script>
     <script src="visualizers/ArrayVisualizer.js"></script>
@@ -175,6 +205,13 @@
     <script src="visualizers/LinkedListVisualizer.js"></script>
     <script src="visualizers/GraphVisualizer.js"></script>
     <script src="lib/d3-force.min.js"></script>
+    <!-- Modifier system -->
+    <script src="modifiers/BaseModifier.js"></script>
+    <script src="modifiers/ModifierRegistry.js"></script>
+    <script src="modifiers/PointerModifier.js"></script>
+    <script src="modifiers/ColorModifier.js"></script>
+    <script src="modifiers/LabelModifier.js"></script>
+    <script src="modifiers/RangeModifier.js"></script>
     <script src="core/Manager.js"></script>
     <script src="main.js"></script>
 
