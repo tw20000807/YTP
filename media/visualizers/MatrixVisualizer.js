@@ -12,7 +12,8 @@ class MatrixVisualizer extends BaseVisualizer {
         this._prevValues = new Map();
         this._dynCellW = null;  // set by onContainerResize
         this._dynCellH = null; 
-
+        this.allVariable = null;
+        this.pointers = []; // (name, val)
         this.matrixContainer = document.createElement('div');
         this.matrixContainer.className = 'viz-matrix-grid';
         this.container.appendChild(this.matrixContainer);
@@ -23,7 +24,32 @@ class MatrixVisualizer extends BaseVisualizer {
     getToolbar() {
         return this._toolbar;
     }
+    getParams() {
+        return { rowLimit: this.rowLimit, colLimit: this.colLimit, rowBase: this.rowBase, colBase: this.colBase, pointers: this.pointers };
+    }
 
+    setParams({ rowLimit, colLimit, rowBase, colBase, pointers } = {}) {
+        if (rowBase !== undefined) {
+            this.rowBase = Math.max(0, parseInt(rowBase) || 0);
+            if (this._rowBaseInput) this._rowBaseInput.value = this.rowBase === 0 ? '' : this.rowBase;
+        }
+        if (colBase !== undefined) {
+            this.colBase = Math.max(0, parseInt(colBase) || 0);
+            if (this._colBaseInput) this._colBaseInput.value = this.colBase === 0 ? '' : this.colBase;
+        }
+        if (rowLimit !== undefined) {
+            this.rowLimit = rowLimit === null ? null : Math.max(0, parseInt(rowLimit) || 0);
+            if (this._rowLimitInput) this._rowLimitInput.value = this.rowLimit === null ? '' : this.rowLimit;
+        }
+        if (colLimit !== undefined) {
+            this.colLimit = colLimit === null ? null : Math.max(0, parseInt(colLimit) || 0);
+            if (this._colLimitInput) this._colLimitInput.value = this.colLimit === null ? '' : this.colLimit;
+        }
+        if (pointers !== undefined) {
+            this.pointers = pointers;
+            this._syncPointersUI();
+        }
+    }
     _buildToolbar() {
         const toolbar = document.createElement('div');
         toolbar.className = 'viz-matrix-toolbar';
@@ -46,9 +72,66 @@ class MatrixVisualizer extends BaseVisualizer {
             this._render();
         });
 
+        
+        const ptrSection = document.createElement('div');
+        ptrSection.className = 'viz-ll-section';
+        const ptrSectionLabel = document.createElement('div');
+        ptrSectionLabel.className = 'viz-ll-section-title';
+        ptrSectionLabel.textContent = 'Pointers:';
+        ptrSection.appendChild(ptrSectionLabel);
+        this._pointersContainer = document.createElement('div');
+        this._pointersContainer.className = 'viz-ll-rows';
+        ptrSection.appendChild(this._pointersContainer);
+        const addPtrBtn = document.createElement('button');
+        addPtrBtn.className = 'viz-ll-add-btn';
+        addPtrBtn.textContent = '+ Add pointer';
+        addPtrBtn.addEventListener('mousedown', e => e.stopPropagation());
+        addPtrBtn.addEventListener('click', () => {
+            this.pointers.push({ name: '', rvalue: null, cvalue: null });
+            this._syncPointersUI();
+        });
+        ptrSection.appendChild(addPtrBtn);
+        toolbar.appendChild(ptrSection);
+
         return toolbar;
     }
+    _syncPointersUI() {
+        if (!this._pointersContainer) return;
+        this._pointersContainer.innerHTML = '';
+        this.pointers.forEach((ptr, idx) => {
+            const row = this._mkPointerRow(ptr, idx);
+            this._pointersContainer.appendChild(row);
+        });
+    }
+    _mkPointerRow(ptr, idx) {
+        const row = document.createElement('div');
+        row.className = 'viz-ll-row';
 
+        const pointInput = document.createElement('input');
+        pointInput.type = 'text';
+        pointInput.className = 'viz-ll-input';
+        pointInput.placeholder = 'pointer name';
+        pointInput.value = ptr.name;
+        pointInput.addEventListener('mousedown', e => e.stopPropagation());
+        pointInput.addEventListener('change', e => {
+            this.pointers[idx].name = e.target.value.trim();
+            this._render();
+        });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'viz-ll-remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('mousedown', e => e.stopPropagation());
+        removeBtn.addEventListener('click', () => {
+            this.pointers.splice(idx, 1);
+            this._syncPointersUI();
+            this._render();
+        });
+
+        row.appendChild(pointInput);
+        row.appendChild(removeBtn);
+        return row;
+    }
     _createControl(toolbar, labelText, placeholder, onChange) {
         const group = document.createElement('div');
         group.className = 'viz-matrix-control';
@@ -69,7 +152,7 @@ class MatrixVisualizer extends BaseVisualizer {
         toolbar.appendChild(group);
     }
 
-    update(variable) {
+    update(variable, allVariable) {
         this._prevValues = new Map();
         if (this.variable && this.variable.children) {
             this.variable.children.forEach((row, r) => {

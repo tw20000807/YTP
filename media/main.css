@@ -468,19 +468,19 @@ body {
 }
 /* -----------modify----------- */
 
-/* 當這個 Index 上面有指標 (Pointer) 時的強化樣式 */
 .viz-array-index--pointer {
     color: #ffd700; /* 變成亮眼的金色 */
     font-weight: bold;
     text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); /* 增加一點點發光感 */
-    transform: scale(1.1); /* 稍微放大一點點 */
+    transform: scale(1.1); 
 }
 
 
-/* 當 Index 被標註時，格子的邊框也可以跟著變色 */
 .viz-array-index--pointer + .viz-array-value {
     color: #fff;
 }
+
+
 
 /* --------------------- */
 /* -- matrix -- */
@@ -879,6 +879,17 @@ body {
     line-height: 18px;
     border-top: 2px solid #eee;
     margin-top: 2px;
+}
+
+.viz-bar-index--pointer {
+    color: #ffd700; /* 變成亮眼的金色 */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); /* 增加一點點發光感 */
+    transform: scale(1.1); /* 稍微放大一點點 */
+}
+
+.viz-bar-index--pointer + .viz-bar-value {
+    color: #fff;
 }
 
 @keyframes viz-pulse {

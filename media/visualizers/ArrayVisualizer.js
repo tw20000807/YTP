@@ -32,11 +32,11 @@ class ArrayVisualizer extends BaseVisualizer {
     }
 
     getParams() {
-        return { base: this.base, limit: this.limit };
+        return { base: this.base, limit: this.limit, pointers: this.pointers };
     }
 
     /** Restore state. Does NOT render — caller invokes update() afterwards. */
-    setParams({ base, limit } = {}) {
+    setParams({ base, limit, pointers } = {}) {
         if (base !== undefined) {
             this.base = Math.max(0, parseInt(base) || 0);
             if (this._baseInput) this._baseInput.value = this.base === 0 ? '' : this.base;
@@ -44,6 +44,10 @@ class ArrayVisualizer extends BaseVisualizer {
         if (limit !== undefined) {
             this.limit = limit === null ? null : Math.max(0, parseInt(limit) || 0);
             if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit;
+        }
+        if (pointers !== undefined) {
+            this.pointers = pointers;
+            this._syncPointersUI();
         }
     }
 
@@ -222,7 +226,6 @@ class ArrayVisualizer extends BaseVisualizer {
                         ptr.value = idx;
                     }
                 }
-                console.log(ptr);
             });
         }
 
@@ -260,34 +263,6 @@ class ArrayVisualizer extends BaseVisualizer {
             box.appendChild(valueEl);
             this.arrayBoxContainer.appendChild(box);
         }
-
-        //TEST
-        // const box = document.createElement('div');
-        // box.className = 'viz-array-box';
-        // // Apply dynamic width determined by onContainerResize
-        // if (this._dynBoxW) {
-        //     box.style.width = this._dynBoxW;
-        //     box.style.flex = `0 0 ${this._dynBoxW}`;
-        // }
-        // if (this._dynBoxH) {
-        //     box.style.height = this._dynBoxH;
-        // }
-        // this.pointers.forEach(ptr => {
-        //     const indexEl = document.createElement('div');
-        //     indexEl.className = 'viz-array-index';
-        //     indexEl.textContent = ptr.name;
-
-        //     const valueEl = document.createElement('div');
-        //     valueEl.className = 'viz-array-value';
-            
-
-        //     box.appendChild(indexEl);
-        //     box.appendChild(valueEl);
-        //     this.arrayBoxContainer.appendChild(box);
-        // });
-        // console.log(this.allVariable);
-        // this.arrayBoxContainer.appendChild(box);
-        //TEST
     }
 }
 
