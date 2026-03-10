@@ -6,11 +6,14 @@ class ArrayVisualizer extends BaseVisualizer {
         super(container);
         this.base = 0;
         this.limit = null; // null = show all (inclusive end index)
+        this.indexLabel = 'index'; // 'index' | 'name'
         this.allVariable = null;
         this.variable = null;
         this._prevValues = new Map(); // index -> previous value string
         this._dynBoxW = null; // dynamic box width set by onContainerResize
         this._dynBoxH = null; // dynamic box height set by onContainerResize
+        this._lastRows = 1; // track rows for hysteresis
+        this.dataFields = []; // {fieldName, nickname}[] – struct field names to show per element
 
         this.pointers = []; // (name, val)
         // Content area: connected boxes
@@ -64,6 +67,25 @@ class ArrayVisualizer extends BaseVisualizer {
             this._render();
         });
 
+        // Index label toggle
+        const ilGroup = document.createElement('div');
+        ilGroup.className = 'viz-control';
+        const ilSpan = document.createElement('span');
+        ilSpan.className = 'viz-ctrl-label';
+        ilSpan.textContent = 'Label: ';
+        this._indexLabelBtn = document.createElement('button');
+        this._indexLabelBtn.className = 'viz-toggle';
+        this._indexLabelBtn.addEventListener('mousedown', e => e.stopPropagation());
+        this._indexLabelBtn.addEventListener('click', () => {
+            this.indexLabel = this.indexLabel === 'index' ? 'name' : 'index';
+            this._syncIndexLabelBtn();
+            this._render();
+        });
+        this._syncIndexLabelBtn();
+        ilGroup.appendChild(ilSpan);
+        ilGroup.appendChild(this._indexLabelBtn);
+        toolbar.appendChild(ilGroup);
+
         const ptrSection = document.createElement('div');
         ptrSection.className = 'viz-ll-section';
         const ptrSectionLabel = document.createElement('div');
@@ -85,6 +107,12 @@ class ArrayVisualizer extends BaseVisualizer {
         toolbar.appendChild(ptrSection);
 
         return toolbar;
+    }
+
+    _syncIndexLabelBtn() {
+        if (!this._indexLabelBtn) return;
+        this._indexLabelBtn.textContent = this.indexLabel === 'index' ? 'Index' : 'Name';
+        this._indexLabelBtn.classList.toggle('viz-toggle--active', this.indexLabel === 'name');
     }
     _syncPointersUI() {
         if (!this._pointersContainer) return;
@@ -126,7 +154,7 @@ class ArrayVisualizer extends BaseVisualizer {
 
     _createControl(toolbar, labelText, initialValue, onChange) {
         const group = document.createElement('div');
-        group.className = 'viz-array-control';
+        group.className = 'viz-control';
 
         const span = document.createElement('span');
         span.className = 'viz-ctrl-label';
@@ -136,7 +164,7 @@ class ArrayVisualizer extends BaseVisualizer {
         input.type = 'number';
         input.placeholder = labelText === 'Limit' ? 'all' : '0';
         input.value = initialValue;
-        input.className = 'viz-array-input';
+        input.className = 'viz-input';
         // Prevent drag-start on the block when clicking into the input
         input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('change', (e) => onChange(e.target.value));
@@ -155,9 +183,166 @@ class ArrayVisualizer extends BaseVisualizer {
         }
         this.allVariable = allVariable;
         this.variable = variable;
+        this._syncAdvancedUI();
         
         this._render();
         
+    }
+
+    // ── Advanced settings (data fields) ────────────────────────────────────
+
+    _getAvailableFieldNames() {
+        if (!this.variable || !this.variable.children) return [];
+        const allNames = new Set();
+        // Collect from all array elements (union), from [i] downward
+        for (const child of this.variable.children) {
+            if (child.children) {
+                this._collectFieldPaths(child, '', allNames);
+            }
+        }
+        return [...allNames];
+    }
+
+    _collectFieldPaths(varData, prefix, names) {
+        if (!varData || !varData.children) return;
+        for (const child of varData.children) {
+            const leaf = this._leafName(child.name);
+            if (/^\[\d+\]$/.test(leaf)) {
+                if (child.children) this._collectFieldPaths(child, prefix, names);
+                continue;
+            }
+            const fullPath = prefix ? `${prefix}/${leaf}` : leaf;
+            names.add(fullPath);
+            if (child.children && child.children.length > 0) {
+                this._collectFieldPaths(child, fullPath, names);
+            }
+        }
+    }
+
+    _leafName(name) {
+        const parts = (name || '').split(/->|\./);
+        for (let i = parts.length - 1; i >= 0; i--) {
+            const s = parts[i].trim();
+            if (s) return s;
+        }
+        return name || '';
+    }
+
+    _resolveFieldValue(varData, fieldPath) {
+        const parts = fieldPath.split('/');
+        let current = varData;
+        for (const part of parts) {
+            if (!current || !current.children) return undefined;
+            let child = current.children.find(c => this._leafName(c.name) === part);
+            if (!child) {
+                for (const c of current.children) {
+                    if (/^\[\d+\]$/.test(this._leafName(c.name)) && c.children) {
+                        child = c.children.find(gc => this._leafName(gc.name) === part);
+                        if (child) break;
+                    }
+                }
+            }
+            if (!child) return undefined;
+            current = child;
+        }
+        return current ? current.value : undefined;
+    }
+
+    _collectLeafFields(varData, prefix, fields) {
+        if (!varData || !varData.children) return;
+        for (const child of varData.children) {
+            const leaf = this._leafName(child.name);
+            if (/^\[\d+\]$/.test(leaf)) {
+                if (child.children) this._collectLeafFields(child, prefix, fields);
+                continue;
+            }
+            const fullPath = prefix ? `${prefix}/${leaf}` : leaf;
+            if (!child.children || child.children.length === 0) {
+                fields.push({ name: fullPath, value: child.value });
+            } else {
+                this._collectLeafFields(child, fullPath, fields);
+            }
+        }
+    }
+
+    _syncAdvancedUI() {
+        if (!this._advFieldsContainer) return;
+        this._advFieldsContainer.innerHTML = '';
+        this.dataFields.forEach((df, idx) => {
+            const row = document.createElement('div');
+            row.className = 'viz-ll-row';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'viz-input';
+            input.placeholder = 'field name';
+            input.value = df.fieldName;
+            if (typeof CustomDropdown !== 'undefined') {
+                CustomDropdown.attach(input, () => this._getAvailableFieldNames());
+            }
+            input.addEventListener('mousedown', e => e.stopPropagation());
+            input.addEventListener('change', e => {
+                this.dataFields[idx].fieldName = e.target.value.trim();
+                this._render();
+            });
+            const nickInput = document.createElement('input');
+            nickInput.type = 'text';
+            nickInput.className = 'viz-input viz-ll-nick-input';
+            nickInput.placeholder = 'nickname (opt.)';
+            nickInput.value = df.nickname;
+            nickInput.addEventListener('mousedown', e => e.stopPropagation());
+            nickInput.addEventListener('change', e => {
+                this.dataFields[idx].nickname = e.target.value.trim();
+                this._render();
+            });
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'viz-ll-remove-btn';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('mousedown', e => e.stopPropagation());
+            removeBtn.addEventListener('click', () => {
+                this.dataFields.splice(idx, 1);
+                this._syncAdvancedUI();
+                this._render();
+            });
+            row.appendChild(input);
+            row.appendChild(nickInput);
+            row.appendChild(removeBtn);
+            this._advFieldsContainer.appendChild(row);
+        });
+        // update datalist
+        this._ensureAdvDatalist();
+    }
+
+    _ensureAdvDatalist() {
+        // Custom dropdown is attached inline in _syncAdvancedUI; nothing else needed.
+    }
+
+    getAdvancedSettingsUI() {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '4px';
+
+        const header = document.createElement('div');
+        header.className = 'modifier-section-header';
+        header.textContent = 'Data Fields';
+        wrap.appendChild(header);
+
+        this._advFieldsContainer = document.createElement('div');
+        this._advFieldsContainer.className = 'viz-ll-rows';
+        wrap.appendChild(this._advFieldsContainer);
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'viz-ll-add-btn';
+        addBtn.textContent = '+ Add data field';
+        addBtn.addEventListener('mousedown', e => e.stopPropagation());
+        addBtn.addEventListener('click', () => {
+            this.dataFields.push({ fieldName: '', nickname: '' });
+            this._syncAdvancedUI();
+        });
+        wrap.appendChild(addBtn);
+
+        this._syncAdvancedUI();
+        return wrap;
     }
 
     _rangeBounds(total) {
@@ -178,25 +363,25 @@ class ArrayVisualizer extends BaseVisualizer {
         if (end < start) return;
         const N = end - start + 1;
 
-        // viz-array-container has no padding
         const availW = w;
         const availH = h;
 
-        // Pure optimizer: maximize min(h/rows, w/ceil(N/rows)) over rows in [1, N].
-        const BOX_H = 52;
+        // Enumerate every possible row count and pick the one that
+        // maximises  score = min(floor(height/rows), floor(width/ceil(N/rows)))
+        // Tie-break: smaller rowcnt wins.
         let bestRows = 1;
-        let bestScore = -Infinity;
+        let bestScore = -1;
         for (let rows = 1; rows <= N; rows++) {
             const cols = Math.ceil(N / rows);
-            const score = Math.min(availH / rows, availW / cols);
-            if (score > bestScore || (Math.abs(score - bestScore) < 1e-9 && rows < bestRows)) {
+            const score = Math.min(Math.floor(availH / rows), Math.floor(availW / cols));
+            if (score > bestScore || (score === bestScore && rows < bestRows)) {
                 bestScore = score;
                 bestRows = rows;
             }
         }
 
         const targetCols = Math.ceil(N / bestRows);
-        const boxW = Math.floor((availW + targetCols - 1) / targetCols);
+        const boxW = Math.floor(availW / targetCols);
         const boxH = Math.floor(availH / bestRows);
         this._dynBoxW = `${boxW}px`;
         this._dynBoxH = `${boxH}px`;
@@ -208,6 +393,7 @@ class ArrayVisualizer extends BaseVisualizer {
 
     _render() {
         this.arrayBoxContainer.innerHTML = '';
+        this._elements = [];
 
         if (!this.variable || !this.variable.children || this.variable.children.length === 0) {
             const msg = document.createElement('span');
@@ -251,17 +437,65 @@ class ArrayVisualizer extends BaseVisualizer {
             
 
             const indexEl = document.createElement('div');
+            indexEl.className = 'viz-array-index';
+            indexEl.textContent = this.indexLabel === 'name' ? this._leafName(child.name) : i;
             indexEl.className = 'viz-array-index' + (matchedPointers.length > 0 ? ' viz-array-index--pointer' : '');
             indexEl.textContent = matchedPointers.length > 0 ? matchedPointers.map(p => p.name).join(',') : i;
 
-            const valueEl = document.createElement('div');
-            valueEl.className = 'viz-array-value';
-            valueEl.textContent = child.value;
-            if (child.type) valueEl.title = child.type;
+            // Data fields: show struct fields
+            const activeFields = this.dataFields.filter(f => f.fieldName);
+            if (activeFields.length > 0 && child.children) {
+                // User-configured data fields: use path resolution
+                const valueEl = document.createElement('div');
+                valueEl.className = 'viz-array-value viz-array-value--multi';
+                for (const df of activeFields) {
+                    const val = this._resolveFieldValue(child, df.fieldName);
+                    const displayName = df.nickname || df.fieldName;
+                    const line = document.createElement('div');
+                    line.className = 'viz-array-field-line';
+                    if (activeFields.length === 1) {
+                        line.textContent = val !== undefined ? String(val) : 'NaN';
+                    } else {
+                        line.textContent = val !== undefined ? `${displayName}:${val}` : `${displayName}:NaN`;
+                    }
+                    valueEl.appendChild(line);
+                }
+                if (child.type) valueEl.title = child.type;
+                box.appendChild(indexEl);
+                box.appendChild(valueEl);
+            } else if (child.children && child.children.length > 0) {
+                // No configured fields but element has children: show all by default
+                const allFields = [];
+                this._collectLeafFields(child, '', allFields);
+                const valueEl = document.createElement('div');
+                if (allFields.length <= 1) {
+                    // No child or one child: display only the value
+                    valueEl.className = 'viz-array-value';
+                    valueEl.textContent = allFields.length === 1 ? String(allFields[0].value) : child.value;
+                } else {
+                    // Multiple children: display as name: value, one per line
+                    valueEl.className = 'viz-array-value viz-array-value--multi';
+                    for (const field of allFields) {
+                        const line = document.createElement('div');
+                        line.className = 'viz-array-field-line';
+                        line.textContent = `${field.name}:${field.value}`;
+                        valueEl.appendChild(line);
+                    }
+                }
+                if (child.type) valueEl.title = child.type;
+                box.appendChild(indexEl);
+                box.appendChild(valueEl);
+            } else {
+                const valueEl = document.createElement('div');
+                valueEl.className = 'viz-array-value';
+                valueEl.textContent = child.value;
+                if (child.type) valueEl.title = child.type;
+                box.appendChild(indexEl);
+                box.appendChild(valueEl);
+            }
 
-            box.appendChild(indexEl);
-            box.appendChild(valueEl);
             this.arrayBoxContainer.appendChild(box);
+            this._elements.push({ index: i, domRef: box, text: child.value });
         }
     }
 }

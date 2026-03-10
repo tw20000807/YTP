@@ -66,6 +66,39 @@
             }]
         },
 
+        'weighted-adj-list': {
+            frameId: 1001,
+            scopes: [{
+                name: 'Locals',
+                variables: [
+                    buildWeightedAdjList('wAdj', 5, [[0,1,3],[0,2,7],[1,3,2],[1,4,5],[2,4,1]]),
+                    { name: 'N', value: '5', type: 'int' }
+                ]
+            }]
+        },
+
+        'edge-list': {
+            frameId: 1001,
+            scopes: [{
+                name: 'Locals',
+                variables: [
+                    buildEdgeList('edges', [[0,1],[0,2],[1,3],[2,3],[3,4]]),
+                    buildWeightedEdgeList('wEdges', [[0,1,5],[0,2,3],[1,3,2],[2,3,7],[3,4,1]])
+                ]
+            }]
+        },
+
+        'heap': {
+            frameId: 1001,
+            scopes: [{
+                name: 'Locals',
+                variables: [
+                    buildHeapArray('heap', [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]),
+                    { name: 'heapSize', value: '10', type: 'int' }
+                ]
+            }]
+        },
+
         'json-text': {
             frameId: 1001,
             scopes: [{
@@ -147,6 +180,80 @@
                     value: String(mat[r][c]),
                     type: 'int'
                 }))
+            }))
+        };
+    }
+
+    function buildWeightedAdjList(name, n, edges) {
+        // edges: [[u, v, w], ...] — build adj list of {to, weight} structs
+        const adj = Array.from({ length: n }, () => []);
+        edges.forEach(([u, v, w]) => { adj[u].push({ to: v, weight: w }); });
+
+        return {
+            name: name,
+            value: `[${n}]`,
+            type: `vector<vector<pair<int,int>>> [${n}]`,
+            children: Array.from({ length: n }, (_, i) => ({
+                name: `(${name})[${i}]`,
+                value: `[${adj[i].length}]`,
+                type: 'vector<pair<int,int>>',
+                children: adj[i].map((e, j) => ({
+                    name: `(${name})[${i}][${j}]`,
+                    value: `{${e.to}, ${e.weight}}`,
+                    type: 'pair<int,int>',
+                    children: [
+                        { name: `(${name})[${i}][${j}].first`, value: String(e.to), type: 'int' },
+                        { name: `(${name})[${i}][${j}].second`, value: String(e.weight), type: 'int' }
+                    ]
+                }))
+            }))
+        };
+    }
+
+    function buildEdgeList(name, edges) {
+        return {
+            name: name,
+            value: `[${edges.length}]`,
+            type: `vector<pair<int,int>>`,
+            children: edges.map(([u, v], i) => ({
+                name: `(${name})[${i}]`,
+                value: `{${u}, ${v}}`,
+                type: 'pair<int,int>',
+                children: [
+                    { name: `(${name})[${i}].first`, value: String(u), type: 'int' },
+                    { name: `(${name})[${i}].second`, value: String(v), type: 'int' }
+                ]
+            }))
+        };
+    }
+
+    function buildWeightedEdgeList(name, edges) {
+        return {
+            name: name,
+            value: `[${edges.length}]`,
+            type: `vector<tuple<int,int,int>>`,
+            children: edges.map(([u, v, w], i) => ({
+                name: `(${name})[${i}]`,
+                value: `{${u}, ${v}, ${w}}`,
+                type: 'tuple<int,int,int>',
+                children: [
+                    { name: `(${name})[${i}][0]`, value: String(u), type: 'int' },
+                    { name: `(${name})[${i}][1]`, value: String(v), type: 'int' },
+                    { name: `(${name})[${i}][2]`, value: String(w), type: 'int' }
+                ]
+            }))
+        };
+    }
+
+    function buildHeapArray(name, values) {
+        return {
+            name: name,
+            value: `[${values.length}]`,
+            type: `int [${values.length}]`,
+            children: values.map((v, i) => ({
+                name: `(${name})[${i}]`,
+                value: String(v),
+                type: 'int'
             }))
         };
     }

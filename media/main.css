@@ -316,9 +316,7 @@ body {
 
 /* Each control group becomes transparent to the grid — label and input become
    direct grid children and therefore share the same two-column track. */
-.block-popup .viz-graph-control,
-.block-popup .viz-array-control,
-.block-popup .viz-matrix-control {
+.block-popup .viz-control {
     display: contents;
 }
 
@@ -338,15 +336,14 @@ body {
 }
 
 /* Col 2: controls fill the available track width */
-.block-popup .viz-graph-select,
-.block-popup .viz-array-input,
-.block-popup .viz-matrix-input {
+.block-popup .viz-select,
+.block-popup .viz-input {
     width: 100%;
     min-width: 60px;
     box-sizing: border-box;
     flex: unset;
 }
-.block-popup .viz-graph-toggle {
+.block-popup .viz-toggle {
     width: 100%;
     box-sizing: border-box;
     flex: unset;
@@ -371,21 +368,138 @@ body {
     flex-shrink: 0;
 }
 
-/* Array Visualizer */
-.viz-array-control {
+/* ── Tabbed pages inside popup ── */
+.popup-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    margin: 0 -8px;            /* extend to popup edges */
+    padding: 0 8px;
+}
+.popup-tab {
+    padding: 3px 10px;
+    font-size: 0.8em;
+    color: #888;
+    cursor: pointer;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    white-space: nowrap;
+}
+.popup-tab:hover {
+    color: var(--text-color);
+}
+.popup-tab--active {
+    color: var(--text-color);
+    border-bottom-color: var(--vscode-focusBorder, #007acc);
+}
+.popup-page {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+}
+.popup-page--active {
+    display: flex;
+}
+
+/* ── Modifier Section (inside popup) ── */
+.modifier-section {
+    padding-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.modifier-section-header {
+    font-size: 0.8em;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.modifier-row {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 4px; 
-    margin-bottom: 4px; 
+    gap: 6px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: var(--text-color);
+    cursor: pointer;
 }
-.viz-ctrl-label {
-    font-size: 0.78em;
-    color: #888;
-    user-select: none;
-    text-align: left;
+.modifier-row:hover {
+    background: rgba(255,255,255,0.05);
 }
-.viz-array-input {
+.modifier-tag {
+    color: #569cd6;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.modifier-var {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.modifier-remove {
+    font-size: 0.9em;
+    padding: 0 4px;
+    line-height: 1;
+}
+.modifier-add-btn {
+    font-size: 0.8em;
+    color: #569cd6;
+    background: transparent;
+    border: 1px dashed #569cd6;
+    border-radius: 3px;
+    padding: 3px 8px;
+    cursor: pointer;
+    margin-top: 2px;
+}
+.modifier-add-btn:hover {
+    background: rgba(86,156,214,0.15);
+}
+.modifier-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: #252526;
+}
+.modifier-settings-panel {
+    padding: 4px 8px 4px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+/* Pointer arrow indicator */
+.viz-pointer-arrow {
+    font-size: 14px;
+    line-height: 1;
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+}
+.viz-pointer-label {
+    font-size: 11px;
+    font-weight: 600;
+    display: block;
+    text-align: center;
+}
+
+/* ── Shared Visualizer Controls ── */
+.viz-control {
+    display: flex;
+    align-items: center;
+    font-size: 0.85em;
+    color: var(--text-color);
+    gap: 4px;
+}
+
+.viz-input {
+    flex: 1;                 /* fill remaining label width */
+    min-width: 24px;
+    width: 0;                /* override browser default so flex: 1 can shrink below it */
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
@@ -395,15 +509,12 @@ body {
     outline: none;
     border-radius: 0;  
 }
+
 .viz-array-input:focus {
     outline: 1px solid var(--highlight-color);
     border-color: var(--highlight-color);
 }
-.viz-array-input::-webkit-inner-spin-button,
-.viz-array-input::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
+
 .viz-array-container {
     display: flex;
     flex-direction: row;
@@ -450,6 +561,19 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+}
+.viz-array-value--multi {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 4px;
+}
+.viz-array-field-line {
+    font-size: 0.85em;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .viz-array-empty {
@@ -546,27 +670,7 @@ body {
     background-color: var(--sidebar-bg);
 }
 
-.viz-matrix-control {
-    display: flex;
-    align-items: center;
-    font-size: 0.85em;
-    color: var(--text-color);
-}
 
-.viz-matrix-input {
-    width: 44px;
-    margin-left: 4px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1px 4px;
-    font-size: 0.9em;
-}
-
-.viz-matrix-input:focus {
-    outline: 1px solid var(--highlight-color);
-    border-color: var(--highlight-color);
-}
 
 .viz-matrix-cell--changed {
     box-shadow: inset 0 0 0 2px #b8860b;
@@ -616,6 +720,13 @@ body {
     user-select: none;
     pointer-events: none;
 }
+.viz-graph-node-data {
+    fill: #a0c0e0;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 10px;
+    user-select: none;
+    pointer-events: none;
+}
 
 /* Edges */
 .viz-graph-edge {
@@ -640,51 +751,7 @@ body {
     pointer-events: none;
 }
 
-/* Toolbar controls */
-.viz-graph-control {
-    display: flex;
-    flex: 1 1 auto;          /* grow to fill toolbar row */
-    min-width: 0;
-    align-items: center;
-    font-size: 0.85em;
-    color: var(--text-color);
-    gap: 4px;
-}
 
-.viz-graph-select {
-    flex: 1;                 /* fill remaining label width */
-    min-width: 36px;
-    width: 0;                /* allow shrinking below browser default */
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1px 4px;
-    font-size: 0.9em;
-}
-
-.viz-graph-select:focus {
-    outline: 1px solid var(--highlight-color);
-    border-color: var(--highlight-color);
-}
-
-.viz-graph-toggle {
-    flex: 1;                 /* expand to fill label just like select */
-    min-width: 36px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1px 8px;
-    font-size: 0.9em;   /* match .viz-graph-select */
-    cursor: pointer;
-    vertical-align: middle;
-    line-height: normal;
-}
-
-.viz-graph-toggle--active {
-    background-color: #1e3a5f;
-    border-color: #6e9ccf;
-    color: #d4e8ff;
-}
 
 /* ── Copy-image button in popup type row ──────────────────────────────── */
 .block-copy-btn {
@@ -757,6 +824,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: 3px;
+}
+
+.viz-ll-row-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 3px;
+    border-bottom: 1px dotted var(--border-color);
 }
 
 .viz-ll-row {

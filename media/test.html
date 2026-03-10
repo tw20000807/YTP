@@ -154,7 +154,10 @@
             <option value="">Select test data...</option>
             <option value="array-matrix">Array & Matrix</option>
             <option value="linked-list">Linked List</option>
-            <option value="graph">Graph</option>
+            <option value="graph">Graph (Adj Matrix)</option>
+            <option value="weighted-adj-list">Weighted Adj List</option>
+            <option value="edge-list">Edge List</option>
+            <option value="heap">Heap</option>
             <option value="json-text">JSON & Text</option>
         </select>
         
@@ -194,6 +197,7 @@
     </script>
 
     <!-- Load all visualizer scripts -->
+    <script src="utils/CustomDropdown.js"></script>
     <script src="utils/ResizeHandle.js"></script>
     <script src="core/Registry.js"></script>
     <script src="visualizers/BaseVisualizer.js"></script>
@@ -204,6 +208,7 @@
     <script src="visualizers/MatrixVisualizer.js"></script>
     <script src="visualizers/LinkedListVisualizer.js"></script>
     <script src="visualizers/GraphVisualizer.js"></script>
+    <script src="visualizers/HeapVisualizer.js"></script>
     <script src="lib/d3-force.min.js"></script>
     <!-- Modifier system -->
     <script src="modifiers/BaseModifier.js"></script>

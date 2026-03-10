@@ -4,6 +4,8 @@ console.log('[YTP] BaseVisualizer.js loaded');
 class BaseVisualizer {
     constructor(container) {
         this.container = container;
+        /** @type {Array<{index:number, domRef:Element, text:string, rect?:{x:number,y:number,w:number,h:number}}>} */
+        this._elements = [];
     }
     update(variable, AllVariable = null) {}
     /**
@@ -25,5 +27,16 @@ class BaseVisualizer {
      * @param {Object} params
      */
     setParams(params) {}
+    /**
+     * Return the element descriptor list after the last render.
+     * Each entry: { index, domRef, text, rect? }
+     * Modifiers use this to target visual elements.
+     */
+    getElements() { return this._elements; }
+    /**
+     * Override to return a DOM element for the Advanced settings tab.
+     * @returns {HTMLElement|null}
+     */
+    getAdvancedSettingsUI() { return null; }
     dispose() {}
 }

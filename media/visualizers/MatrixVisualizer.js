@@ -134,7 +134,7 @@ class MatrixVisualizer extends BaseVisualizer {
     }
     _createControl(toolbar, labelText, placeholder, onChange) {
         const group = document.createElement('div');
-        group.className = 'viz-matrix-control';
+        group.className = 'viz-control';
 
         const span = document.createElement('span');
         span.className = 'viz-ctrl-label';
@@ -143,7 +143,7 @@ class MatrixVisualizer extends BaseVisualizer {
         const input = document.createElement('input');
         input.type = 'number';
         input.placeholder = placeholder;
-        input.className = 'viz-matrix-input';
+        input.className = 'viz-input';
         input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('change', (e) => onChange(e.target.value));
 
@@ -206,6 +206,7 @@ class MatrixVisualizer extends BaseVisualizer {
 
     _render() {
         this.matrixContainer.innerHTML = '';
+        this._elements = [];
 
         if (!this.variable || !this.variable.children || this.variable.children.length === 0) {
             this.matrixContainer.textContent = 'No Matrix Data';
@@ -218,6 +219,9 @@ class MatrixVisualizer extends BaseVisualizer {
             ? rows.length - 1
             : Math.min(Math.max(0, this.rowLimit), Math.max(0, rows.length - 1));
         if (rEnd < rStart) return;
+
+        // Use total column count for linear index calculation
+        const maxCols = rows.reduce((mx, row) => Math.max(mx, row.children ? row.children.length : 0), 0);
 
         for (let r = rStart; r <= rEnd; r++) {
             const rowData = rows[r];
@@ -260,6 +264,9 @@ class MatrixVisualizer extends BaseVisualizer {
                 if (cellData.type) cell.title = `Type: ${cellData.type}`;
 
                 rowElement.appendChild(cell);
+
+                // Flattened linear index for modifier targeting
+                this._elements.push({ index: r * maxCols + c, domRef: cell, text: cellData.value });
             }
             this.matrixContainer.appendChild(rowElement);
         }
