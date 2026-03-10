@@ -122,11 +122,34 @@ export class WebviewManager implements vscode.Disposable {
                 .map(([name]) => ['media', 'visualizers', name])
         ];
 
+        // Auto-discover modifier scripts from media/modifiers/
+        // BaseModifier.js + ModifierRegistry.js must load first
+        const modifiersDir = vscode.Uri.joinPath(this.extensionUri, 'media', 'modifiers');
+        let modifierPaths: string[][] = [];
+        try {
+            const modifierFiles = await vscode.workspace.fs.readDirectory(modifiersDir);
+            modifierPaths = [
+                ['media', 'modifiers', 'BaseModifier.js'],
+                ['media', 'modifiers', 'ModifierRegistry.js'],
+                ...modifierFiles
+                    .filter(([name, type]) =>
+                        type === vscode.FileType.File &&
+                        name.endsWith('.js') &&
+                        name !== 'BaseModifier.js' &&
+                        name !== 'ModifierRegistry.js'
+                    )
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([name]) => ['media', 'modifiers', name])
+            ];
+        } catch (_) { /* modifiers/ folder may not exist */ }
+
         const scriptPaths = [
             ['media', 'core', 'Registry.js'],
             ...libPaths,
+            ['media', 'utils', 'CustomDropdown.js'],
             ...visualizerPaths,
             ['media', 'utils', 'ResizeHandle.js'],
+            ...modifierPaths,
             ['media', 'core', 'Manager.js'],
             ['media', 'main.js']
         ];

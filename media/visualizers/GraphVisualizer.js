@@ -1,7 +1,7 @@
 // @ts-nocheck
 console.log('[YTP] GraphVisualizer.js loaded');
 
-class GraphVisualizer extends BaseVisualizer {
+class GraphVisualizer extends GraphBaseVisualizer {
     constructor(container) {
         super(container);
 
@@ -9,25 +9,26 @@ class GraphVisualizer extends BaseVisualizer {
         this.variable    = null;
         this.base        = 0;
         this.limit       = null;   // null = show all (inclusive end index)
-        this.format      = null;   // 'adj_matrix' | 'adj_list' | 'next'
+        this.format      = null;   // 'adj_matrix' | 'adj_list' | 'next' | 'edge_list'
         this.directed    = null;   // null = auto-detect on first update
         this.layout      = 'circle'; // 'spring' | 'circle' | 'layer' | 'chain'
         this.weights     = 'none'; // 'none' | 'weighted'
         this.layerRoot   = null;   // null = auto (in-degree 0); number = fixed BFS root
         this.reverseEdges = false;  // when true, mirror every edge A→B as B→A
         this._nodeLayerMap = null;  // Map<nodeId, layerIndex> – populated by _layoutLayer
+        this.nextField     = '';    // optional: struct field name for "next" (edge target)
+        this.weightField   = '';    // optional: struct field name for edge weight
+        this.edgeListFrom  = '';    // edge_list: field for 'from' (u)
+        this.edgeListTo    = '';    // edge_list: field for 'to' (v)
+        this.edgeListWeight = '';   // edge_list: field for weight (w)
 
         // ── graph data ───────────────────────────────────────────────────────
-        this._nodes = [];   // [{id, x, y}]
         this._rawEdges = []; // parsed edges before mode-based expansion
-        this._edges = [];    // stored/rendered edges after mode-based expansion
         this._addedNodeIds = new Set();
         this._addedRawEdgeKeys = new Set();
 
         // ── DOM ──────────────────────────────────────────────────────────────
-        this._svgContainer = document.createElement('div');
-        this._svgContainer.className = 'viz-graph-container';
-        this.container.appendChild(this._svgContainer);
+        // (SVG container inherited from GraphBaseVisualizer)
 
         // ── SVG element refs (populated by _renderGraph) ─────────────────────
         this._svgEl       = null;
@@ -35,6 +36,7 @@ class GraphVisualizer extends BaseVisualizer {
         this._nodeMap     = new Map(); // id -> {node, g}
 
         this._toolbar = this._buildToolbar();
+        this._advancedUI = this._buildAdvancedUI();
     }
 
     getToolbar() { return this._toolbar; }
@@ -49,12 +51,17 @@ class GraphVisualizer extends BaseVisualizer {
             directed:     this.directed,
             reverseEdges: this.reverseEdges,
             layerRoot:    this.layerRoot,
-            weights:      this.weights
+            weights:      this.weights,
+            nextField:      this.nextField,
+            weightField:    this.weightField,
+            edgeListFrom:   this.edgeListFrom,
+            edgeListTo:     this.edgeListTo,
+            edgeListWeight: this.edgeListWeight
         };
     }
 
     /** Restore toolbar states. Does NOT render — caller invokes update() afterwards. */
-    setParams({ base, limit, format, directed, layout, weights, layerRoot, reverseEdges } = {}) {
+    setParams({ base, limit, format, directed, layout, weights, layerRoot, reverseEdges, nodeDataField, dataFields, nextField, nextNickname, weightField, weightNickname, edgeListFrom, edgeListTo, edgeListWeight } = {}) {
         if (base         !== undefined) { this.base    = Math.max(0, parseInt(base) || 0); if (this._baseInput)  this._baseInput.value  = this.base  || ''; }
         if (limit        !== undefined) { this.limit   = limit === null ? null : Math.max(0, parseInt(limit) || 0); if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit; }
         if (format       !== undefined && format   !== null) { this.format   = format;   if (this._formatSel)  this._formatSel.value  = format;  }
@@ -63,6 +70,22 @@ class GraphVisualizer extends BaseVisualizer {
         if (weights      !== undefined && weights  !== null) { this.weights  = weights;  if (this._weightsSel) this._weightsSel.value = weights; }
         if (layerRoot    !== undefined)                      { this.layerRoot = layerRoot === null ? null : parseInt(layerRoot); if (this._rootInput) this._rootInput.value = this.layerRoot === null ? '' : this.layerRoot; }
         if (reverseEdges !== undefined)                      { this.reverseEdges = !!reverseEdges; this._syncRevBtn(); }
+        // Legacy compat: convert old dataFields/nodeDataField to nextField
+        if (nodeDataField !== undefined && nextField === undefined) {
+            this.nextField = nodeDataField || '';
+            if (this._nextFieldInput) this._nextFieldInput.value = this.nextField;
+        }
+        if (dataFields !== undefined && nextField === undefined) {
+            const arr = Array.isArray(dataFields) ? dataFields : [];
+            const first = arr[0];
+            this.nextField = first ? (typeof first === 'string' ? first : first.fieldName || '') : '';
+            if (this._nextFieldInput) this._nextFieldInput.value = this.nextField;
+        }
+        if (nextField    !== undefined)                      { this.nextField = nextField || ''; if (this._nextFieldInput) this._nextFieldInput.value = this.nextField; }
+        if (weightField   !== undefined)                     { this.weightField = weightField || ''; if (this._weightFieldInput) this._weightFieldInput.value = this.weightField; }
+        if (edgeListFrom  !== undefined)                     { this.edgeListFrom = edgeListFrom || ''; if (this._edgeListFromInput) this._edgeListFromInput.value = this.edgeListFrom; }
+        if (edgeListTo    !== undefined)                     { this.edgeListTo = edgeListTo || ''; if (this._edgeListToInput) this._edgeListToInput.value = this.edgeListTo; }
+        if (edgeListWeight!== undefined)                     { this.edgeListWeight = edgeListWeight || ''; if (this._edgeListWeightInput) this._edgeListWeightInput.value = this.edgeListWeight; }
         this._showHideLayout();
     }
 
@@ -85,7 +108,7 @@ class GraphVisualizer extends BaseVisualizer {
 
         // Format
         this._formatSel = this._mkSelect(toolbar, 'Format',
-            ['adj_matrix', 'adj_list', 'next'], (v) => {
+            ['adj_matrix', 'adj_list', 'next', 'edge_list'], (v) => {
                 this.format = v;
                 this._showHideLayout();
                 this._refresh();
@@ -93,12 +116,12 @@ class GraphVisualizer extends BaseVisualizer {
 
         // Directed toggle
         const dirGroup = document.createElement('div');
-        dirGroup.className = 'viz-graph-control';
+        dirGroup.className = 'viz-control';
         const dirSpan = document.createElement('span');
         dirSpan.className = 'viz-ctrl-label';
         dirSpan.textContent = 'Direction: ';
         this._dirBtn = document.createElement('button');
-        this._dirBtn.className = 'viz-graph-toggle';
+        this._dirBtn.className = 'viz-toggle';
         this._dirBtn.addEventListener('mousedown', e => e.stopPropagation());
         this._dirBtn.addEventListener('click', () => {
             this.directed = !this.directed;
@@ -133,6 +156,15 @@ class GraphVisualizer extends BaseVisualizer {
             });
         toolbar.appendChild(this._layoutWrap);
 
+        return toolbar;
+    }
+
+    _buildAdvancedUI() {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '6px';
+
         // Root (visible only when layout === 'layer')
         this._rootWrap = document.createElement('div');
         this._rootWrap.className = 'viz-toolbar-wrap viz-toolbar-hidden';
@@ -142,22 +174,24 @@ class GraphVisualizer extends BaseVisualizer {
             this._renderGraph();
         });
         this._rootInput.placeholder = 'auto';
-        toolbar.appendChild(this._rootWrap);
+        wrap.appendChild(this._rootWrap);
 
         // Weights
-        this._weightsSel = this._mkSelect(toolbar, 'Weights', ['none', 'weighted'], (v) => {
+        this._weightsSel = this._mkSelect(wrap, 'Weights', ['none', 'weighted'], (v) => {
             this.weights = v;
-            this._renderGraph();
+            this._refresh();
         });
+        this._weightsWrap = this._weightsSel.closest('.viz-control');
 
         // Reverse edges toggle
         const revGroup = document.createElement('div');
-        revGroup.className = 'viz-graph-control';
+        revGroup.className = 'viz-control';
+        this._revWrap = revGroup;
         const revSpan = document.createElement('span');
         revSpan.className = 'viz-ctrl-label';
         revSpan.textContent = 'Rev.Edges: ';
         this._revBtn = document.createElement('button');
-        this._revBtn.className = 'viz-graph-toggle';
+        this._revBtn.className = 'viz-toggle';
         this._revBtn.addEventListener('mousedown', e => e.stopPropagation());
         this._revBtn.addEventListener('click', () => {
             this.reverseEdges = !this.reverseEdges;
@@ -167,21 +201,147 @@ class GraphVisualizer extends BaseVisualizer {
         this._syncRevBtn();
         revGroup.appendChild(revSpan);
         revGroup.appendChild(this._revBtn);
-        toolbar.appendChild(revGroup);
+        wrap.appendChild(revGroup);
 
-        return toolbar;
+        // Next field (determines which child variable is the "next"/target for adj_list and next formats)
+        const dataSection = document.createElement('div');
+        dataSection.className = 'viz-ll-section';
+        this._dataSection = dataSection;
+        const dataSectionLabel = document.createElement('div');
+        dataSectionLabel.className = 'viz-ll-section-title';
+        dataSectionLabel.textContent = 'Next:';
+        dataSection.appendChild(dataSectionLabel);
+        const nextGroup = document.createElement('div');
+        nextGroup.className = 'viz-ll-row';
+        this._nextFieldInput = document.createElement('input');
+        this._nextFieldInput.type = 'text';
+        this._nextFieldInput.className = 'viz-ll-input';
+        this._nextFieldInput.placeholder = '(auto)';
+        this._nextFieldInput.value = this.nextField;
+        this._nextFieldInput.addEventListener('mousedown', e => e.stopPropagation());
+        this._nextFieldInput.addEventListener('change', e => {
+            this.nextField = e.target.value.trim();
+            this._refresh();
+        });
+        nextGroup.appendChild(this._nextFieldInput);
+        dataSection.appendChild(nextGroup);
+        wrap.appendChild(dataSection);
+
+        // Edge weight field
+        const weightSection = document.createElement('div');
+        weightSection.className = 'viz-ll-section';
+        this._weightSection = weightSection;
+        const weightSectionLabel = document.createElement('div');
+        weightSectionLabel.className = 'viz-ll-section-title';
+        weightSectionLabel.textContent = 'Weight:';
+        weightSection.appendChild(weightSectionLabel);
+        const weightGroup = document.createElement('div');
+        weightGroup.className = 'viz-ll-row';
+        this._weightFieldInput = document.createElement('input');
+        this._weightFieldInput.type = 'text';
+        this._weightFieldInput.className = 'viz-ll-input';
+        this._weightFieldInput.placeholder = '(auto)';
+        this._weightFieldInput.value = this.weightField;
+        // datalist attribute set dynamically by _ensureNodeFieldDatalist()
+        this._weightFieldInput.addEventListener('mousedown', e => e.stopPropagation());
+        this._weightFieldInput.addEventListener('change', e => {
+            this.weightField = e.target.value.trim();
+            this._refresh();
+        });
+        weightGroup.appendChild(this._weightFieldInput);
+        weightSection.appendChild(weightGroup);
+        wrap.appendChild(weightSection);
+
+        // ── Edge-list specific fields ────────────────────────────────────────
+        const edgeListSection = document.createElement('div');
+        edgeListSection.className = 'viz-ll-section';
+        this._edgeListSection = edgeListSection;
+        const elSectionLabel = document.createElement('div');
+        elSectionLabel.className = 'viz-ll-section-title';
+        elSectionLabel.textContent = 'Edge List Fields:';
+        edgeListSection.appendChild(elSectionLabel);
+
+        // From (u)
+        const fromRow = document.createElement('div');
+        fromRow.className = 'viz-ll-row';
+        const fromLabel = document.createElement('span');
+        fromLabel.className = 'viz-ctrl-label';
+        fromLabel.textContent = 'from (u): ';
+        fromLabel.style.fontSize = '0.85em';
+        fromLabel.style.minWidth = '52px';
+        this._edgeListFromInput = document.createElement('input');
+        this._edgeListFromInput.type = 'text';
+        this._edgeListFromInput.className = 'viz-ll-input';
+        this._edgeListFromInput.placeholder = '(auto: 1st)';
+        this._edgeListFromInput.value = this.edgeListFrom;
+        this._edgeListFromInput.addEventListener('mousedown', e => e.stopPropagation());
+        this._edgeListFromInput.addEventListener('change', e => {
+            this.edgeListFrom = e.target.value.trim();
+            this._refresh();
+        });
+        fromRow.appendChild(fromLabel);
+        fromRow.appendChild(this._edgeListFromInput);
+        edgeListSection.appendChild(fromRow);
+
+        // To (v)
+        const toRow = document.createElement('div');
+        toRow.className = 'viz-ll-row';
+        const toLabel = document.createElement('span');
+        toLabel.className = 'viz-ctrl-label';
+        toLabel.textContent = 'to (v): ';
+        toLabel.style.fontSize = '0.85em';
+        toLabel.style.minWidth = '52px';
+        this._edgeListToInput = document.createElement('input');
+        this._edgeListToInput.type = 'text';
+        this._edgeListToInput.className = 'viz-ll-input';
+        this._edgeListToInput.placeholder = '(auto: 2nd)';
+        this._edgeListToInput.value = this.edgeListTo;
+        this._edgeListToInput.addEventListener('mousedown', e => e.stopPropagation());
+        this._edgeListToInput.addEventListener('change', e => {
+            this.edgeListTo = e.target.value.trim();
+            this._refresh();
+        });
+        toRow.appendChild(toLabel);
+        toRow.appendChild(this._edgeListToInput);
+        edgeListSection.appendChild(toRow);
+
+        // Weight (w) for edge_list
+        const elWeightRow = document.createElement('div');
+        elWeightRow.className = 'viz-ll-row';
+        const elWeightLabel = document.createElement('span');
+        elWeightLabel.className = 'viz-ctrl-label';
+        elWeightLabel.textContent = 'weight (w): ';
+        elWeightLabel.style.fontSize = '0.85em';
+        elWeightLabel.style.minWidth = '52px';
+        this._edgeListWeightInput = document.createElement('input');
+        this._edgeListWeightInput.type = 'text';
+        this._edgeListWeightInput.className = 'viz-ll-input';
+        this._edgeListWeightInput.placeholder = '(auto: 3rd)';
+        this._edgeListWeightInput.value = this.edgeListWeight;
+        this._edgeListWeightInput.addEventListener('mousedown', e => e.stopPropagation());
+        this._edgeListWeightInput.addEventListener('change', e => {
+            this.edgeListWeight = e.target.value.trim();
+            this._refresh();
+        });
+        elWeightRow.appendChild(elWeightLabel);
+        elWeightRow.appendChild(this._edgeListWeightInput);
+        edgeListSection.appendChild(elWeightRow);
+
+        wrap.appendChild(edgeListSection);
+
+        return wrap;
     }
 
     _mkNumInput(parent, label, placeholder, onChange) {
         const group = document.createElement('div');
-        group.className = 'viz-array-control';
+        group.className = 'viz-control';
         const span = document.createElement('span');
         span.className = 'viz-ctrl-label';
         span.textContent = label + ': ';
         const input = document.createElement('input');
         input.type = 'number';
         input.placeholder = placeholder;
-        input.className = 'viz-array-input';
+        input.className = 'viz-input';
         input.addEventListener('mousedown', e => e.stopPropagation());
         input.addEventListener('change', e => onChange(e.target.value));
         group.appendChild(span);
@@ -192,12 +352,12 @@ class GraphVisualizer extends BaseVisualizer {
 
     _mkSelect(parent, label, options, onChange) {
         const group = document.createElement('div');
-        group.className = 'viz-graph-control';
+        group.className = 'viz-control';
         const span = document.createElement('span');
         span.className = 'viz-ctrl-label';
         span.textContent = label + ': ';
         const sel = document.createElement('select');
-        sel.className = 'viz-graph-select';
+        sel.className = 'viz-select';
         options.forEach(o => {
             const opt = document.createElement('option');
             opt.value = o; opt.textContent = o;
@@ -213,19 +373,120 @@ class GraphVisualizer extends BaseVisualizer {
 
     _syncDirBtn() {
         this._dirBtn.textContent = this.directed ? 'Directed' : 'Undirected';
-        this._dirBtn.classList.toggle('viz-graph-toggle--active', !!this.directed);
+        this._dirBtn.classList.toggle('viz-toggle--active', !!this.directed);
     }
 
     _syncRevBtn() {
         if (!this._revBtn) return;
         this._revBtn.textContent = this.reverseEdges ? 'Yes' : 'No';
-        this._revBtn.classList.toggle('viz-graph-toggle--active', !!this.reverseEdges);
+        this._revBtn.classList.toggle('viz-toggle--active', !!this.reverseEdges);
+    }
+
+    getAdvancedSettingsUI() {
+        return this._advancedUI;
     }
 
     _showHideLayout() {
         // Show root input only when layout === 'layer'
         if (this._rootWrap) {
             this._rootWrap.classList.toggle('viz-toolbar-hidden', this.layout !== 'layer');
+        }
+        // Hide all advanced settings for adj_matrix
+        const isMatrix = this.format === 'adj_matrix';
+        const isEdgeList = this.format === 'edge_list';
+        // Weights dropdown is always visible (adj_matrix cell values ARE weights)
+        if (this._revWrap)       this._revWrap.classList.toggle('viz-toolbar-hidden', isMatrix);
+        // Next/Weight sections: shown for adj_list/next only
+        if (this._dataSection)   this._dataSection.classList.toggle('viz-toolbar-hidden', isMatrix || isEdgeList);
+        if (this._weightSection) this._weightSection.classList.toggle('viz-toolbar-hidden', isMatrix || isEdgeList);
+        // Edge-list section: shown only for edge_list format
+        if (this._edgeListSection) this._edgeListSection.classList.toggle('viz-toolbar-hidden', !isEdgeList);
+    }
+
+    // ── Autocomplete helpers ──────────────────────────────────────────────────────
+
+    _getAvailableNodeFieldNames() {
+        if (!this.variable || !this.variable.children) return [];
+        const allNames = new Set();
+        const children = this.variable.children;
+        const start = Math.min(Math.max(0, this.base), children.length - 1);
+        const end = this.limit === null ? children.length - 1 : Math.min(Math.max(0, this.limit), children.length - 1);
+        for (let i = start; i <= end; i++) {
+            if (!children[i].children) continue;
+            if (this.format === 'adj_list') {
+                for (const sub of children[i].children) {
+                    if (sub.children) {
+                        this._collectFieldPaths(sub, '', allNames);
+                    }
+                }
+            } else if (this.format === 'edge_list') {
+                // For edge_list: collect from each edge element's children
+                this._collectFieldPaths(children[i], '', allNames);
+            } else if (this.format !== 'adj_matrix') {
+                this._collectFieldPaths(children[i], '', allNames);
+            }
+        }
+        return [...allNames];
+    }
+
+    _collectFieldPaths(varData, prefix, names) {
+        if (!varData || !varData.children) return;
+        for (const child of varData.children) {
+            const leaf = this._leafName(child.name);
+            if (/^\[\d+\]$/.test(leaf)) {
+                if (child.children) this._collectFieldPaths(child, prefix, names);
+                continue;
+            }
+            const fullPath = prefix ? `${prefix}/${leaf}` : leaf;
+            names.add(fullPath);
+            if (child.children && child.children.length > 0) {
+                this._collectFieldPaths(child, fullPath, names);
+            }
+        }
+    }
+
+    _leafName(name) {
+        const parts = (name || '').split(/->|\./);
+        for (let i = parts.length - 1; i >= 0; i--) {
+            const s = parts[i].trim();
+            if (s) return s;
+        }
+        return name || '';
+    }
+
+    _resolveFieldValue(varData, fieldPath) {
+        const parts = fieldPath.split('/');
+        let current = varData;
+        for (const part of parts) {
+            if (!current || !current.children) return undefined;
+            let child = current.children.find(c => this._leafName(c.name) === part);
+            if (!child) {
+                for (const c of current.children) {
+                    if (/^\[\d+\]$/.test(this._leafName(c.name)) && c.children) {
+                        child = c.children.find(gc => this._leafName(gc.name) === part);
+                        if (child) break;
+                    }
+                }
+            }
+            if (!child) return undefined;
+            current = child;
+        }
+        return current ? current.value : undefined;
+    }
+
+    _ensureNodeFieldDatalist() {
+        const names = this._getAvailableNodeFieldNames();
+        const getOpts = () => names;
+        const inputs = [
+            this._nextFieldInput, this._weightFieldInput,
+            this._edgeListFromInput, this._edgeListToInput, this._edgeListWeightInput
+        ];
+        for (const inp of inputs) {
+            if (!inp) continue;
+            if (typeof CustomDropdown !== 'undefined') {
+                CustomDropdown.attach(inp, getOpts);
+                CustomDropdown.updateOptions(inp, getOpts);
+            }
         }
     }
 
@@ -263,8 +524,16 @@ class GraphVisualizer extends BaseVisualizer {
                 this.layout = 'chain';
                 if (this._layoutSel) this._layoutSel.value = 'chain';
             }
+            // Auto-detect weighted adj_matrix (values beyond 0/1)
+            if (fmt === 'adj_matrix' && this._detectWeightedMatrix(variable)) {
+                this.weights = 'weighted';
+                if (this._weightsSel) this._weightsSel.value = 'weighted';
+            }
             this._showHideLayout();
         }
+
+        // Refresh autocomplete datalists (after format is known)
+        this._ensureNodeFieldDatalist();
 
         this._refresh(isFirstCall);
     }
@@ -300,11 +569,26 @@ class GraphVisualizer extends BaseVisualizer {
             }
         } else if (format === 'adj_list') {
             for (let i = start; i <= end; i++) {
-                for (const nb of (children[i].children || [])) {
-                    const to = parseInt(nb.value);
-                    if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight: null });
+                const subs = children[i].children || [];
+                for (let j = 0; j < subs.length; j++) {
+                    const nb = subs[j];
+                    let to;
+                    if (this.nextField) {
+                        const val = this._resolveFieldValue(nb, this.nextField);
+                        to = val !== undefined ? parseInt(val) : NaN;
+                    } else {
+                        to = parseInt(nb.value);
+                    }
+                    let weight = null;
+                    if (this.weightField) {
+                        const wv = this._resolveFieldValue(nb, this.weightField);
+                        weight = wv !== undefined ? wv : null;
+                    }
+                    if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight });
                 }
             }
+        } else if (format === 'edge_list') {
+            return this._parseEdgeListSnapshot(children, start, end);
         } else {
             for (let i = start; i <= end; i++) {
                 const row = children[i].children || [];
@@ -317,6 +601,44 @@ class GraphVisualizer extends BaseVisualizer {
             }
         }
 
+        return { nodes, edges };
+    }
+
+    /** Parse an edge-list array: each element is (u, v) or (u, v, w). */
+    _parseEdgeListSnapshot(children, start, end) {
+        const nodeSet = new Set();
+        const edges = [];
+        for (let i = start; i <= end; i++) {
+            const entry = children[i];
+            const subs = entry.children || [];
+            let u, v, w = null;
+            if (this.edgeListFrom) {
+                const val = this._resolveFieldValue(entry, this.edgeListFrom);
+                u = val !== undefined ? parseInt(val) : NaN;
+            } else {
+                u = subs.length > 0 ? parseInt(subs[0].value) : NaN;
+            }
+            if (this.edgeListTo) {
+                const val = this._resolveFieldValue(entry, this.edgeListTo);
+                v = val !== undefined ? parseInt(val) : NaN;
+            } else {
+                v = subs.length > 1 ? parseInt(subs[1].value) : NaN;
+            }
+            if (this.weights === 'weighted') {
+                if (this.edgeListWeight) {
+                    const val = this._resolveFieldValue(entry, this.edgeListWeight);
+                    w = val !== undefined ? val : null;
+                } else {
+                    w = subs.length > 2 ? subs[2].value : null;
+                }
+            }
+            if (!isNaN(u) && !isNaN(v)) {
+                nodeSet.add(u);
+                nodeSet.add(v);
+                edges.push({ from: u, to: v, weight: w });
+            }
+        }
+        const nodes = [...nodeSet].sort((a, b) => a - b).map(id => ({ id }));
         return { nodes, edges };
     }
 
@@ -365,7 +687,7 @@ class GraphVisualizer extends BaseVisualizer {
     // ── Format / direction auto-detection ─────────────────────────────────────
 
     _detectFormat(variable) {
-        if (!variable || !variable.children || variable.children.length === 0) return 'adj_list';
+        // if (!variable || !variable.children || variable.children.length === 0) return 'adj_list';
         const ch = variable.children;
         const hasGrand = ch.some(c => c.children && c.children.length > 0);
         if (!hasGrand) return 'next';
@@ -378,6 +700,19 @@ class GraphVisualizer extends BaseVisualizer {
         const s = new Set(edges.map(e => `${e.from},${e.to}`));
         for (const e of edges) {
             if (!s.has(`${e.to},${e.from}`)) return true;
+        }
+        return false;
+    }
+
+    /** Returns true if any adj_matrix cell value is something other than '0' or '1'. */
+    _detectWeightedMatrix(variable) {
+        if (!variable || !variable.children) return false;
+        for (const row of variable.children) {
+            if (!row.children) continue;
+            for (const cell of row.children) {
+                const v = cell.value;
+                if (v !== '0' && v !== '1' && v !== '') return true;
+            }
         }
         return false;
     }
@@ -409,11 +744,29 @@ class GraphVisualizer extends BaseVisualizer {
             }
         } else if (this.format === 'adj_list') {
             for (let i = start; i <= end; i++) {
-                for (const nb of (ch[i].children || [])) {
-                    const to = parseInt(nb.value);
-                    if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight: null });
+                const subs = ch[i].children || [];
+                for (let j = 0; j < subs.length; j++) {
+                    const nb = subs[j];
+                    let to;
+                    if (this.nextField) {
+                        const val = this._resolveFieldValue(nb, this.nextField);
+                        to = val !== undefined ? parseInt(val) : NaN;
+                    } else {
+                        to = parseInt(nb.value);
+                    }
+                    let weight = null;
+                    if (this.weightField) {
+                        const wv = this._resolveFieldValue(nb, this.weightField);
+                        weight = wv !== undefined ? wv : null;
+                    }
+                    if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight });
                 }
             }
+        } else if (this.format === 'edge_list') {
+            const result = this._parseEdgeListSnapshot(ch, start, end);
+            // Add x, y to nodes for layout
+            result.nodes = result.nodes.map(n => ({ id: n.id, x: undefined, y: undefined }));
+            return result;
         } else { // adj_matrix
             for (let i = start; i <= end; i++) {
                 const row = ch[i].children || [];
@@ -488,61 +841,12 @@ class GraphVisualizer extends BaseVisualizer {
         this._nodes.forEach((nd, i) => { nd.x = ox + i * spacing; nd.y = nodeY; });
     }
 
-    _layoutCircle(w, h) {
-        const r = Math.min(w, h) * 0.36;
-        const cx = w / 2, cy = h / 2;
-        this._nodes.forEach((nd, i) => {
-            const a = (2 * Math.PI * i / this._nodes.length) - Math.PI / 2;
-            nd.x = cx + r * Math.cos(a);
-            nd.y = cy + r * Math.sin(a);
-        });
-    }
+    // _layoutCircle inherited from GraphBaseVisualizer
 
     // BFS-based layer assignment; returns Map<layerIndex, nodeId[]>
     _computeLayers() {
-        // Build adjacency list (treat edges as directed for BFS)
-        const adj   = new Map(this._nodes.map(n => [n.id, []]));
-        const inDeg = new Map(this._nodes.map(n => [n.id, 0]));
-        const seen  = new Set();
-        for (const e of this._edges) {
-            const key = `${e.from},${e.to}`;
-            if (seen.has(key) || e.from === e.to) continue;
-            seen.add(key);
-            if (adj.has(e.from)) adj.get(e.from).push(e.to);
-            if (inDeg.has(e.to)) inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
-        }
-        const layer = new Map();
-        // Use user-specified root, or auto-detect in-degree 0 nodes
-        let roots;
-        if (this.layerRoot !== null && this._nodes.some(n => n.id === this.layerRoot)) {
-            roots = [this.layerRoot];
-        } else {
-            roots = this._nodes
-                .filter(n => (inDeg.get(n.id) || 0) === 0)
-                .map(n => n.id);
-        }
-        if (roots.length === 0 && this._nodes.length > 0) roots.push(this._nodes[0].id);
-        const queue = roots.slice();
-        roots.forEach(id => layer.set(id, 0));
-        let qi = 0;
-        while (qi < queue.length) {
-            const id = queue[qi++];
-            for (const nid of (adj.get(id) || [])) {
-                if (!layer.has(nid)) {
-                    layer.set(nid, layer.get(id) + 1);
-                    queue.push(nid);
-                }
-            }
-        }
-        // Disconnected nodes go to the last layer + 1
-        const maxL = layer.size > 0 ? Math.max(...layer.values()) : 0;
-        this._nodes.forEach(n => { if (!layer.has(n.id)) layer.set(n.id, maxL + 1); });
-        const byLayer = new Map();
-        layer.forEach((l, id) => {
-            if (!byLayer.has(l)) byLayer.set(l, []);
-            byLayer.get(l).push(id);
-        });
-        return byLayer;
+        const nodeKeys = this._nodes.map(n => n.id);
+        return this._computeLayersBFS(nodeKeys, this._edges, this.layerRoot);
     }
 
     _layoutLayer(w, h) {
@@ -562,71 +866,9 @@ class GraphVisualizer extends BaseVisualizer {
         });
     }
 
-    // Hand-rolled Fruchterman-Reingold spring simulation — no external dependency
+    // Fruchterman-Reingold spring simulation via base class
     _layoutSpring(w, h) {
-        const nodes = this._nodes;
-        const n     = nodes.length;
-        const pad   = 28; // clamp boundary ≈ NODE_R + a bit
-
-        // Seed positions on a circle if not yet placed
-        nodes.forEach((nd, i) => {
-            if (nd.x === undefined || isNaN(nd.x)) {
-                const a = (2 * Math.PI * i / n) - Math.PI / 2;
-                nd.x = w / 2 + (w * 0.35) * Math.cos(a);
-                nd.y = h / 2 + (h * 0.35) * Math.sin(a);
-            }
-        });
-
-        const nodeIdx = new Map(nodes.map((nd, i) => [nd.id, i]));
-        const k = Math.sqrt((w * h) / n); // ideal inter-node distance
-
-        for (let iter = 0; iter < 200; iter++) {
-            const temp = k * (1 - iter / 200); // cooling factor
-            const disp = nodes.map(() => ({ x: 0, y: 0 }));
-
-            // Repulsion between every pair
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 1; j < n; j++) {
-                    let dx = nodes[i].x - nodes[j].x || 0.01;
-                    let dy = nodes[i].y - nodes[j].y || 0.01;
-                    const dist  = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                    const force = (k * k) / dist;
-                    const fx = (dx / dist) * force;
-                    const fy = (dy / dist) * force;
-                    disp[i].x += fx; disp[i].y += fy;
-                    disp[j].x -= fx; disp[j].y -= fy;
-                }
-            }
-
-            // Attraction along edges (undirected, deduplicated)
-            const seen = new Set();
-            for (const e of this._edges) {
-                const key = [e.from, e.to].sort().join(',');
-                if (seen.has(key)) continue;
-                seen.add(key);
-                const si = nodeIdx.get(e.from);
-                const ti = nodeIdx.get(e.to);
-                if (si === undefined || ti === undefined || si === ti) continue;
-                let dx = nodes[si].x - nodes[ti].x || 0.01;
-                let dy = nodes[si].y - nodes[ti].y || 0.01;
-                const dist  = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                const force = (dist * dist) / k;
-                const fx = (dx / dist) * force;
-                const fy = (dy / dist) * force;
-                disp[si].x -= fx; disp[si].y -= fy;
-                disp[ti].x += fx; disp[ti].y += fy;
-            }
-
-            // Apply displacement with cooling, clamp to canvas
-            nodes.forEach((nd, i) => {
-                const d     = Math.sqrt(disp[i].x ** 2 + disp[i].y ** 2) || 1;
-                const scale = Math.min(d, temp) / d;
-                nd.x += disp[i].x * scale;
-                nd.y += disp[i].y * scale;
-                nd.x = Math.max(pad, Math.min(w - pad, nd.x));
-                nd.y = Math.max(pad, Math.min(h - pad, nd.y));
-            });
-        }
+        super._layoutSpring(w, h, 200, 28);
     }
 
     // ── SVG Rendering ─────────────────────────────────────────────────────────
@@ -645,10 +887,16 @@ class GraphVisualizer extends BaseVisualizer {
 
         const { w, h } = this._canvasSize();
         const NS = 'http://www.w3.org/2000/svg';
+        const NODE_R = 22;
+
+        // Compute tight viewBox from actual node positions
+        const nodeExtents = this._nodes.map(nd => ({
+            x: nd.x, y: nd.y, halfW: NODE_R, halfH: NODE_R
+        }));
+        const vb = this._computeTightViewBox(nodeExtents);
 
         const svg = document.createElementNS(NS, 'svg');
-        // viewBox preserves internal coordinates; 100% lets the SVG scale to the block.
-        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('viewBox', `${vb.vbX} ${vb.vbY} ${vb.vbW} ${vb.vbH}`);
         svg.setAttribute('width',  '100%');
         svg.setAttribute('height', '100%');
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -668,8 +916,9 @@ class GraphVisualizer extends BaseVisualizer {
 
         // Node group
         const nodeGroup = document.createElementNS(NS, 'g');
-        const NODE_R = 22;
-        for (const nd of this._nodes) {
+        this._elements = [];
+        for (let ni = 0; ni < this._nodes.length; ni++) {
+            const nd = this._nodes[ni];
             const g = document.createElementNS(NS, 'g');
             g.setAttribute('class', 'viz-graph-node');
             if (this._addedNodeIds.has(nd.id)) g.classList.add('viz-graph-node--new');
@@ -685,38 +934,28 @@ class GraphVisualizer extends BaseVisualizer {
 
             g.appendChild(circle);
             g.appendChild(text);
+
             nodeGroup.appendChild(g);
 
             this._nodeMap.set(nd.id, { node: nd, g });
             this._bindDrag(g, nd, svg, NS);
+
+            this._elements.push({
+                index: ni, domRef: g, text: nd.id,
+                rect: { x: nd.x - NODE_R, y: nd.y - NODE_R, w: NODE_R * 2, h: NODE_R * 2 }
+            });
         }
         svg.appendChild(nodeGroup);
         this._svgContainer.appendChild(svg);
 
-        // Size the parent block around the natural SVG coordinate space
-        this._resizeBlock(w, h);
+        // Size the parent block around the tight viewBox dimensions
+        this._resizeBlock(vb.vbW, vb.vbH);
+
+        // Apply robust BBox fitting to catch text labels or items outside estimated bounds
+        this.fitSvg();
     }
 
-    // Store desired content dimensions so Manager can size the block.
-    // Manager will call onContainerResize() with the final clamped content area.
-    _resizeBlock(naturalW, naturalH) {
-        this._desiredW = Math.max(naturalW, 150);
-        this._desiredH = Math.max(naturalH, 80);
-        const block = this.container.closest ? this.container.closest('.block') : null;
-        if (block) {
-            block.style.display = 'flex';
-            // Signal Manager to use getDesiredSize() instead of measuring DOM
-            block.dataset.vizSized = '1';
-        }
-    }
-
-    /** Returns the desired content size for Manager to use when sizing the block. */
-    getDesiredSize() {
-        return { w: this._desiredW || 300, h: this._desiredH || 200 };
-    }
-
-    /** No-op: the SVG scales automatically via viewBox + 100% width/height. */
-    onContainerResize(_w, _h) {}
+    // _resizeBlock, getDesiredSize, onContainerResize inherited from GraphBaseVisualizer
 
     // ── Edge drawing (called on full render and on drag) ──────────────────────
 
@@ -887,20 +1126,7 @@ class GraphVisualizer extends BaseVisualizer {
         }
     }
 
-    _mkArrow(NS, id, color) {
-        const marker = document.createElementNS(NS, 'marker');
-        marker.setAttribute('id',           id);
-        marker.setAttribute('markerWidth',  '10');
-        marker.setAttribute('markerHeight', '7');
-        marker.setAttribute('refX',         '9');
-        marker.setAttribute('refY',         '3.5');
-        marker.setAttribute('orient',       'auto');
-        const poly = document.createElementNS(NS, 'polygon');
-        poly.setAttribute('points', '0 0, 10 3.5, 0 7');
-        poly.setAttribute('fill',   color);
-        marker.appendChild(poly);
-        return marker;
-    }
+    // _mkArrow inherited from GraphBaseVisualizer
 
     _drawStraightEdge(NS, src, tgt, edge, withArrow = false, biOffset = 0, isNew = false) {
         const R   = 22;

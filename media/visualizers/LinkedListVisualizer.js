@@ -1,7 +1,7 @@
 // @ts-nocheck
 console.log('[YTP] LinkedListVisualizer.js loaded');
 
-class LinkedListVisualizer extends BaseVisualizer {
+class LinkedListVisualizer extends GraphBaseVisualizer {
     constructor(container) {
         super(container);
 
@@ -9,21 +9,15 @@ class LinkedListVisualizer extends BaseVisualizer {
         this.variable   = null;
         this.dataFields = [];          // string[]   – names of fields to show as node data
         this.pointers   = [];          // {fieldName, nickname}[] – pointer/edge fields
-        this.layout     = 'layer';     // 'layer' | 'spring' | 'circle'
-        this.layerRoot  = null;        // null=auto | number=fixed BFS root index
+        this.layout     = 'auto';     // 'auto' | 'snake' | 'layer'
         this.directed   = true;
 
         // ── graph data ─────────────────────────────────────────────────────────
-        this._nodes = [];  // {id, x, y, data:[{name,value}]}
-        this._edges = [];  // {from, to, label}
         this._nodeIndexById = new Map();
-
-        // ── DOM ────────────────────────────────────────────────────────────────
-        this._svgContainer = document.createElement('div');
-        this._svgContainer.className = 'viz-graph-container';
-        this.container.appendChild(this._svgContainer);
+        // (_nodes, _edges, _svgContainer inherited from GraphBaseVisualizer)
 
         this._toolbar = this._buildToolbar();
+        this._advancedUI = this._buildAdvancedUI();
     }
 
     getToolbar() { return this._toolbar; }
@@ -33,12 +27,11 @@ class LinkedListVisualizer extends BaseVisualizer {
             dataFields: this.dataFields.slice(),
             pointers:   this.pointers.map(p => ({ fieldName: p.fieldName, nickname: p.nickname })),
             layout:     this.layout,
-            layerRoot:  this.layerRoot,
             directed:   this.directed
         };
     }
 
-    setParams({ dataFields, pointers, layout, layerRoot, directed } = {}) {
+    setParams({ dataFields, pointers, layout, directed } = {}) {
         if (dataFields !== undefined) {
             this.dataFields = Array.isArray(dataFields) ? dataFields.slice() : [];
             this._syncDataFieldsUI();
@@ -48,86 +41,32 @@ class LinkedListVisualizer extends BaseVisualizer {
             this._syncPointersUI();
         }
         if (layout    !== undefined && layout    !== null) { this.layout    = layout;    if (this._layoutSel) this._layoutSel.value = layout; }
-        if (layerRoot !== undefined)                       { this.layerRoot = layerRoot === null ? null : parseInt(layerRoot); if (this._rootInput) this._rootInput.value = this.layerRoot === null ? '' : this.layerRoot; }
         if (directed  !== undefined && directed  !== null) { this.directed  = directed;  this._syncDirBtn(); }
-        this._showHideRoot();
     }
 
     dispose() {}
 
-    // ── Toolbar ────────────────────────────────────────────────────────────────
+    // ── Toolbar (Basic Settings) ───────────────────────────────────────────────
 
     _buildToolbar() {
         const tb = document.createElement('div');
 
-        // ── Layout selector ──
-        const layoutGroup = document.createElement('div');
-        layoutGroup.className = 'viz-graph-control';
-        const layoutLabel = document.createElement('label');
-        layoutLabel.textContent = 'Layout: ';
-        this._layoutSel = document.createElement('select');
-        this._layoutSel.className = 'viz-graph-select';
-        ['layer', 'spring', 'circle'].forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o; opt.textContent = o;
-            if (o === this.layout) opt.selected = true;
-            this._layoutSel.appendChild(opt);
-        });
-        this._layoutSel.addEventListener('mousedown', e => e.stopPropagation());
-        this._layoutSel.addEventListener('change', e => {
-            this.layout = e.target.value;
-            if (this.layout === 'layer' && !this.directed && this.layerRoot === null) {
-                this.layerRoot = 0;
-                if (this._rootInput) this._rootInput.value = '0';
-            }
-            this._showHideRoot();
-            this._refresh();
-        });
-        layoutLabel.appendChild(this._layoutSel);
-        layoutGroup.appendChild(layoutLabel);
-        tb.appendChild(layoutGroup);
-
         // ── Direction toggle ──
         const dirGroup = document.createElement('div');
-        dirGroup.className = 'viz-graph-control';
+        dirGroup.className = 'viz-control';
         const dirLabel = document.createElement('label');
         dirLabel.textContent = 'Direction: ';
         this._dirBtn = document.createElement('button');
-        this._dirBtn.className = 'viz-graph-toggle';
+        this._dirBtn.className = 'viz-toggle';
         this._dirBtn.addEventListener('mousedown', e => e.stopPropagation());
         this._dirBtn.addEventListener('click', () => {
             this.directed = !this.directed;
             this._syncDirBtn();
-            if (!this.directed && this.layout === 'layer' && this.layerRoot === null) {
-                this.layerRoot = 0;
-                if (this._rootInput) this._rootInput.value = '0';
-            }
             this._refresh();
         });
         this._syncDirBtn();
         dirLabel.appendChild(this._dirBtn);
         dirGroup.appendChild(dirLabel);
-        tb.appendChild(dirGroup);
-
-        // ── Root (layer only) ──
-        this._rootWrap = document.createElement('div');
-        this._rootWrap.className = 'viz-graph-control';
-        this._rootWrap.style.display = 'none';
-        const rootLabel = document.createElement('label');
-        rootLabel.textContent = 'Root: ';
-        this._rootInput = document.createElement('input');
-        this._rootInput.type = 'number';
-        this._rootInput.placeholder = 'auto';
-        this._rootInput.className = 'viz-array-input';
-        this._rootInput.style.minWidth = '50px';
-        this._rootInput.addEventListener('mousedown', e => e.stopPropagation());
-        this._rootInput.addEventListener('change', e => {
-            this.layerRoot = e.target.value === '' ? null : parseInt(e.target.value);
-            this._refresh();
-        });
-        rootLabel.appendChild(this._rootInput);
-        this._rootWrap.appendChild(rootLabel);
-        tb.appendChild(this._rootWrap);
 
         // ── Data Fields section ──
         const dataSection = document.createElement('div');
@@ -171,20 +110,216 @@ class LinkedListVisualizer extends BaseVisualizer {
         ptrSection.appendChild(addPtrBtn);
         tb.appendChild(ptrSection);
 
-        this._showHideRoot();
+        // ── Direction toggle (appended last: data, pointers, direction) ──
+        tb.appendChild(dirGroup);
+
         return tb;
+    }
+
+    _buildAdvancedUI() {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '4px';
+
+        // ── Layout selector ──
+        const layoutGroup = document.createElement('div');
+        layoutGroup.className = 'viz-control';
+        const layoutLabel = document.createElement('label');
+        layoutLabel.textContent = 'Layout: ';
+        this._layoutSel = document.createElement('select');
+        this._layoutSel.className = 'viz-select';
+        ['auto', 'snake', 'layer'].forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o; opt.textContent = o;
+            if (o === this.layout) opt.selected = true;
+            this._layoutSel.appendChild(opt);
+        });
+        this._layoutSel.addEventListener('mousedown', e => e.stopPropagation());
+        this._layoutSel.addEventListener('change', e => {
+            this.layout = e.target.value;
+            this._refresh();
+        });
+        layoutLabel.appendChild(this._layoutSel);
+        layoutGroup.appendChild(layoutLabel);
+        wrap.appendChild(layoutGroup);
+
+        return wrap;
+    }
+
+    getAdvancedSettingsUI() {
+        return this._advancedUI;
     }
 
     _syncDirBtn() {
         if (!this._dirBtn) return;
         this._dirBtn.textContent = this.directed ? 'Directed' : 'Undirected';
-        this._dirBtn.classList.toggle('viz-graph-toggle--active', !!this.directed);
+        this._dirBtn.classList.toggle('viz-toggle--active', !!this.directed);
     }
 
-    _showHideRoot() {
-        if (this._rootWrap) {
-            this._rootWrap.style.display = this.layout === 'layer' ? 'flex' : 'none';
+    /**
+     * Recursively collect all variable paths under the current node.
+     * Traverses all nodes in the linked list (union).
+     * Path format: p1/p2/name1 (array indices excluded from path).
+     * @returns {string[]} field path names
+     */
+    _getAvailableFieldNames() {
+        if (!this.variable) return [];
+        const allNames = new Set();
+        const nodeType = this.variable.type;
+        const visited = new Set();
+
+        const collectFromNode = (varData) => {
+            const id = varData.name || '';
+            if (visited.has(id)) return;
+            visited.add(id);
+            if (varData.children) {
+                this._collectFieldPaths(varData, '', nodeType, allNames);
+            }
+            // Follow pointer fields to collect from other nodes (union)
+            if (varData.children) {
+                for (const child of varData.children) {
+                    if (this._isPointerToNodeType(child.type, nodeType) &&
+                        child.children && child.children.length > 0) {
+                        collectFromNode(child);
+                    }
+                }
+            }
+        };
+
+        collectFromNode(this.variable);
+        return [...allNames];
+    }
+
+    /**
+     * Recursively collect field paths from a variable's children.
+     */
+    _collectFieldPaths(varData, prefix, nodeType, names) {
+        if (!varData || !varData.children) return;
+        for (const child of varData.children) {
+            const leaf = this._leafName(child.name);
+            if (/^\[\d+\]$/.test(leaf)) {
+                if (child.children) this._collectFieldPaths(child, prefix, nodeType, names);
+                continue;
+            }
+            const fullPath = prefix ? `${prefix}/${leaf}` : leaf;
+            names.add(fullPath);
+            if (this._isPointerToNodeType(child.type, nodeType)) continue;
+            if (child.children && child.children.length > 0) {
+                this._collectFieldPaths(child, fullPath, nodeType, names);
+            }
         }
+    }
+
+    /**
+     * Check if a child's type refers back to the linked-list node type.
+     */
+    _isPointerToNodeType(childType, nodeType) {
+        if (!childType || !nodeType) return false;
+        const normalize = (t) => t.replace(/\b(const|volatile|struct|class|enum)\b/g, '')
+                                  .replace(/[*&\s]/g, '');
+        const a = normalize(childType);
+        const b = normalize(nodeType);
+        return a === b && a !== '';
+    }
+
+    /**
+     * Resolve a slash-separated field path to a value from a variable node.
+     * Transparently traverses through array indices.
+     */
+    _resolveFieldValue(varData, fieldPath) {
+        const parts = fieldPath.split('/');
+        let current = varData;
+        for (const part of parts) {
+            if (!current || !current.children) return undefined;
+            let child = current.children.find(c => this._leafName(c.name) === part);
+            if (!child) {
+                for (const c of current.children) {
+                    if (/^\[\d+\]$/.test(this._leafName(c.name)) && c.children) {
+                        child = c.children.find(gc => this._leafName(gc.name) === part);
+                        if (child) break;
+                    }
+                }
+            }
+            if (!child) return undefined;
+            current = child;
+        }
+        return current ? current.value : undefined;
+    }
+
+    /**
+     * Resolve a slash-separated field path to a child variable node.
+     * Used for following pointer fields.
+     */
+    _resolvePointerChild(varData, fieldPath) {
+        const parts = fieldPath.split('/');
+        let current = varData;
+        for (const part of parts) {
+            if (!current || !current.children) return null;
+            let child = current.children.find(c => this._leafName(c.name) === part);
+            if (!child) {
+                for (const c of current.children) {
+                    if (/^\[\d+\]$/.test(this._leafName(c.name)) && c.children) {
+                        child = c.children.find(gc => this._leafName(gc.name) === part);
+                        if (child) break;
+                    }
+                }
+            }
+            if (!child) return null;
+            current = child;
+        }
+        return current;
+    }
+
+    /**
+     * Auto-detect data fields and pointer fields using type heuristic.
+     * Only runs when both dataFields and pointers are empty (first time).
+     */
+    _autoDetectFields() {
+        if (!this.variable || !this.variable.children) return;
+        if (this.dataFields.length > 0 || this.pointers.length > 0) return;
+        const nodeType = this.variable.type;
+        const data = [];
+        const ptrs = [];
+        this._classifyFields(this.variable, '', nodeType, data, ptrs);
+        this.dataFields = data;
+        this.pointers = ptrs.map(p => ({ fieldName: p, nickname: '' }));
+        this._syncDataFieldsUI();
+        this._syncPointersUI();
+    }
+
+    /**
+     * Recursively classify fields as data or pointer.
+     */
+    _classifyFields(varData, prefix, nodeType, dataList, ptrList) {
+        if (!varData || !varData.children) return;
+        for (const child of varData.children) {
+            const leaf = this._leafName(child.name);
+            if (/^\[\d+\]$/.test(leaf)) {
+                if (child.children) this._classifyFields(child, prefix, nodeType, dataList, ptrList);
+                continue;
+            }
+            const fullPath = prefix ? `${prefix}/${leaf}` : leaf;
+            if (this._isPointerToNodeType(child.type, nodeType)) {
+                ptrList.push(fullPath);
+                continue;
+            }
+            if (!child.children || child.children.length === 0) {
+                dataList.push(fullPath);
+            } else {
+                this._classifyFields(child, fullPath, nodeType, dataList, ptrList);
+            }
+        }
+    }
+
+    /**
+     * Create or update a shared <datalist> element attached to the toolbar
+     * with current available field names.
+     * @returns {string} the datalist element's id
+     */
+    _ensureFieldDatalist() {
+        // No-op: custom dropdown is attached inline in _mkDataFieldRow / _mkPointerRow.
+        return '';
     }
 
     _syncDataFieldsUI() {
@@ -214,6 +349,9 @@ class LinkedListVisualizer extends BaseVisualizer {
         input.className = 'viz-ll-input';
         input.placeholder = 'field name';
         input.value = name;
+        if (typeof CustomDropdown !== 'undefined') {
+            CustomDropdown.attach(input, () => this._getAvailableFieldNames());
+        }
         input.addEventListener('mousedown', e => e.stopPropagation());
         input.addEventListener('change', e => {
             this.dataFields[idx] = e.target.value.trim();
@@ -236,28 +374,23 @@ class LinkedListVisualizer extends BaseVisualizer {
     }
 
     _mkPointerRow(ptr, idx) {
-        const row = document.createElement('div');
-        row.className = 'viz-ll-row';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'viz-ll-row-group';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'viz-ll-row';
 
         const fieldInput = document.createElement('input');
         fieldInput.type = 'text';
         fieldInput.className = 'viz-ll-input';
         fieldInput.placeholder = 'field name';
         fieldInput.value = ptr.fieldName;
+        if (typeof CustomDropdown !== 'undefined') {
+            CustomDropdown.attach(fieldInput, () => this._getAvailableFieldNames());
+        }
         fieldInput.addEventListener('mousedown', e => e.stopPropagation());
         fieldInput.addEventListener('change', e => {
             this.pointers[idx].fieldName = e.target.value.trim();
-            this._refresh();
-        });
-
-        const nickInput = document.createElement('input');
-        nickInput.type = 'text';
-        nickInput.className = 'viz-ll-input viz-ll-nick-input';
-        nickInput.placeholder = 'nickname (opt.)';
-        nickInput.value = ptr.nickname;
-        nickInput.addEventListener('mousedown', e => e.stopPropagation());
-        nickInput.addEventListener('change', e => {
-            this.pointers[idx].nickname = e.target.value.trim();
             this._refresh();
         });
 
@@ -271,16 +404,36 @@ class LinkedListVisualizer extends BaseVisualizer {
             this._refresh();
         });
 
-        row.appendChild(fieldInput);
-        row.appendChild(nickInput);
-        row.appendChild(removeBtn);
-        return row;
+        topRow.appendChild(fieldInput);
+        topRow.appendChild(removeBtn);
+
+        const nickRow = document.createElement('div');
+        nickRow.className = 'viz-ll-row';
+        const nickInput = document.createElement('input');
+        nickInput.type = 'text';
+        nickInput.className = 'viz-ll-input';
+        nickInput.placeholder = 'nickname (opt.)';
+        nickInput.value = ptr.nickname;
+        nickInput.addEventListener('mousedown', e => e.stopPropagation());
+        nickInput.addEventListener('change', e => {
+            this.pointers[idx].nickname = e.target.value.trim();
+            this._refresh();
+        });
+        nickRow.appendChild(nickInput);
+
+        wrapper.appendChild(topRow);
+        wrapper.appendChild(nickRow);
+        return wrapper;
     }
 
     // ── Update ─────────────────────────────────────────────────────────────────
 
     update(variable) {
         this.variable = variable;
+        // Auto-detect data/pointer fields on first update if none configured
+        this._autoDetectFields();
+        // Refresh auto-complete suggestions whenever the variable data changes
+        this._ensureFieldDatalist();
         this._refresh();
     }
 
@@ -313,8 +466,9 @@ class LinkedListVisualizer extends BaseVisualizer {
 
         if (!this.variable) return { nodes, edges };
 
-        const dataSet  = new Set(this.dataFields.filter(f => f));
-        const ptrMap   = new Map(this.pointers.filter(p => p.fieldName).map(p => [p.fieldName, p.nickname]));
+        const dataFields = this.dataFields.filter(f => f);
+        const ptrList = this.pointers.filter(p => p.fieldName);
+        const ptrMap = new Map(ptrList.map(p => [p.fieldName, p.nickname]));
 
         const traverse = (varData, nodeId) => {
             if (visited.has(nodeId)) return;
@@ -325,19 +479,19 @@ class LinkedListVisualizer extends BaseVisualizer {
 
             if (!varData.children) return;
 
-            for (const child of varData.children) {
-                const leaf = this._leafName(child.name);
+            // Resolve data fields by path
+            for (const fieldPath of dataFields) {
+                const value = this._resolveFieldValue(varData, fieldPath);
+                nodeData.push({ name: fieldPath, value: value !== undefined ? String(value) : 'NaN' });
+            }
 
-                if (dataSet.has(leaf)) {
-                    nodeData.push({ name: leaf, value: child.value });
-                }
-
-                if (ptrMap.has(leaf) && child.children && child.children.length > 0) {
-                    // child IS the target struct node; its evaluateName is its unique ID
-                    const childId = child.name;
-                    edges.push({ from: nodeId, to: childId, label: ptrMap.get(leaf) || '' });
-                    // Only follow if not already visited (handles back-edges / cycles)
-                    if (!visited.has(childId)) traverse(child, childId);
+            // Follow pointer fields by path
+            for (const [ptrPath, nickname] of ptrMap) {
+                const ptrChild = this._resolvePointerChild(varData, ptrPath);
+                if (ptrChild && ptrChild.children && ptrChild.children.length > 0) {
+                    const childId = ptrChild.name;
+                    edges.push({ from: nodeId, to: childId, label: nickname || '' });
+                    if (!visited.has(childId)) traverse(ptrChild, childId);
                 }
             }
         };
@@ -362,86 +516,58 @@ class LinkedListVisualizer extends BaseVisualizer {
         return { w, h };
     }
 
+    _getEffectiveLayout() {
+        if (this.layout === 'auto') {
+            const ptrCount = this.pointers.filter(p => p.fieldName).length;
+            return ptrCount >= 2 ? 'layer' : 'snake';
+        }
+        return this.layout;
+    }
+
     _canvasSize() {
         const n = Math.max(this._nodes.length, 1);
-        if (this.layout === 'circle') {
-            const spacing = 140;
-            const r  = Math.max((spacing * n) / (2 * Math.PI), 80);
-            const side = Math.ceil(r * 2 + 80);
-            return { w: Math.max(side, 300), h: Math.max(side, 240) };
+        const effective = this._getEffectiveLayout();
+        if (effective === 'snake') {
+            // Snake: compute cols for a reasonable aspect ratio
+            const sampleDims = this._nodes.length > 0 ? this._nodeDims(this._nodes[0]) : { w: 100, h: 22 };
+            const nodeW = sampleDims.w;
+            const nodeH = sampleDims.h;
+            const hGap = 40;  // horizontal gap between nodes
+            const vGap = 50;  // vertical gap between rows (includes U-turn space)
+            const cols = Math.max(1, Math.ceil(Math.sqrt(n * (nodeW + hGap) / (nodeH + vGap))));
+            const rows = Math.ceil(n / cols);
+            const w = cols * (nodeW + hGap) + hGap;
+            const h = rows * (nodeH + vGap) + vGap;
+            return { w: Math.max(w, 300), h: Math.max(h, 100) };
         }
-        if (this.layout === 'layer') {
-            const byLayer = this._computeLayers();
-            const numL = byLayer.size;
-            const maxPer = Math.max(...[...byLayer.values()].map(a => a.length), 1);
-            return { w: Math.max((numL + 1) * 140, 300), h: Math.max((maxPer + 1) * 90, 240) };
-        }
-        // spring
-        const side = Math.max(Math.ceil(Math.sqrt(n)) * 140 + 80, 300);
-        return { w: side, h: Math.max(Math.ceil(side * 0.75), 240) };
+        // layer (or fallback)
+        const byLayer = this._computeLayers();
+        const numL = byLayer.size;
+        const maxPer = Math.max(...[...byLayer.values()].map(a => a.length), 1);
+        return { w: Math.max((numL + 1) * 140, 300), h: Math.max((maxPer + 1) * 90, 240) };
     }
 
     _applyLayout() {
         if (this._nodes.length === 0) return;
         const { w, h } = this._canvasSize();
-        if (this.layout === 'circle') {
-            this._layoutCircle(w, h);
-        } else if (this.layout === 'layer') {
-            this._layoutLayer(w, h);
+        const effective = this._getEffectiveLayout();
+        if (effective === 'snake') {
+            this._layoutSnake(w, h);
         } else {
-            this._layoutSpring(w, h);
+            this._layoutLayer(w, h);
         }
     }
 
-    _layoutCircle(w, h) {
-        const r = Math.min(w, h) * 0.36;
-        const cx = w / 2, cy = h / 2;
-        this._nodes.forEach((nd, i) => {
-            const a = (2 * Math.PI * i / this._nodes.length) - Math.PI / 2;
-            nd.x = cx + r * Math.cos(a);
-            nd.y = cy + r * Math.sin(a);
-        });
-    }
+    // _layoutCircle inherited from GraphBaseVisualizer
 
     _computeLayers() {
-        const adj   = new Map(this._nodes.map((n, idx) => [idx, []]));
-        const inDeg = new Map(this._nodes.map((_, idx) => [idx, 0]));
+        const nodeKeys = this._nodes.map((_, i) => i);
         const idToIdx = this._nodeIndexById;
-        const seen  = new Set();
-        for (const e of this._edges) {
-            const fi = idToIdx.get(e.from);
-            const ti = idToIdx.get(e.to);
-            if (fi === undefined || ti === undefined || fi === ti) continue;
-            const key = `${fi},${ti}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            adj.get(fi).push(ti);
-            inDeg.set(ti, (inDeg.get(ti) || 0) + 1);
-        }
-        const layer = new Map();
-        let roots;
-        if (this.layerRoot !== null && this.layerRoot < this._nodes.length) {
-            roots = [this.layerRoot];
-        } else {
-            roots = this._nodes
-                .map((_, i) => i)
-                .filter(i => (inDeg.get(i) || 0) === 0);
-        }
-        if (roots.length === 0 && this._nodes.length > 0) roots = [0];
-        const queue = roots.slice();
-        roots.forEach(i => layer.set(i, 0));
-        let qi = 0;
-        while (qi < queue.length) {
-            const i = queue[qi++];
-            for (const ni of (adj.get(i) || [])) {
-                if (!layer.has(ni)) { layer.set(ni, layer.get(i) + 1); queue.push(ni); }
-            }
-        }
-        const maxL = layer.size > 0 ? Math.max(...layer.values()) : 0;
-        this._nodes.forEach((_, i) => { if (!layer.has(i)) layer.set(i, maxL + 1); });
-        const byLayer = new Map();
-        layer.forEach((l, i) => { if (!byLayer.has(l)) byLayer.set(l, []); byLayer.get(l).push(i); });
-        return byLayer;
+        // Map edges from node IDs to indices for BFS
+        const indexEdges = this._edges
+            .map(e => ({ from: idToIdx.get(e.from), to: idToIdx.get(e.to) }))
+            .filter(e => e.from !== undefined && e.to !== undefined);
+        return this._computeLayersBFS(nodeKeys, indexEdges, null);
     }
 
     _layoutLayer(w, h) {
@@ -458,58 +584,38 @@ class LinkedListVisualizer extends BaseVisualizer {
     }
 
     _layoutSpring(w, h) {
-        const nodes = this._nodes;
-        const n     = nodes.length;
+        super._layoutSpring(w, h, 150, 60);
+    }
+
+    /**
+     * Snake layout: nodes arranged left-to-right in rows, wrapping to next row.
+     * Edges between same-row consecutive nodes are straight arrows.
+     * The wrap edge (last in row → first in next row) uses a U-shaped path
+     * routed outside the node area so it doesn't cross any nodes.
+     */
+    _layoutSnake(canvasW, canvasH) {
+        const n = this._nodes.length;
         if (n === 0) return;
-        const pad = 60;
-        nodes.forEach((nd, i) => {
-            if (nd.x === undefined || isNaN(nd.x)) {
-                const a = (2 * Math.PI * i / n) - Math.PI / 2;
-                nd.x = w / 2 + (w * 0.35) * Math.cos(a);
-                nd.y = h / 2 + (h * 0.35) * Math.sin(a);
-            }
-        });
-        const idToIdx = this._nodeIndexById;
-        const nodeIdx = new Map(nodes.map((nd, i) => [nd.id, i]));
-        const k = Math.sqrt((w * h) / n);
-        for (let iter = 0; iter < 150; iter++) {
-            const temp = k * (1 - iter / 150);
-            const disp = nodes.map(() => ({ x: 0, y: 0 }));
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 1; j < n; j++) {
-                    let dx = nodes[i].x - nodes[j].x || 0.01;
-                    let dy = nodes[i].y - nodes[j].y || 0.01;
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                    const force = (k * k) / dist;
-                    const fx = (dx / dist) * force, fy = (dy / dist) * force;
-                    disp[i].x += fx; disp[i].y += fy;
-                    disp[j].x -= fx; disp[j].y -= fy;
-                }
-            }
-            const seen = new Set();
-            for (const e of this._edges) {
-                const si = nodeIdx.get(e.from), ti = nodeIdx.get(e.to);
-                if (si === undefined || ti === undefined || si === ti) continue;
-                const key = [si, ti].sort().join(',');
-                if (seen.has(key)) continue;
-                seen.add(key);
-                let dx = nodes[si].x - nodes[ti].x || 0.01;
-                let dy = nodes[si].y - nodes[ti].y || 0.01;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                const force = (dist * dist) / k;
-                const fx = (dx / dist) * force, fy = (dy / dist) * force;
-                disp[si].x -= fx; disp[si].y -= fy;
-                disp[ti].x += fx; disp[ti].y += fy;
-            }
-            nodes.forEach((nd, i) => {
-                const d = Math.sqrt(disp[i].x ** 2 + disp[i].y ** 2) || 1;
-                const scale = Math.min(d, temp) / d;
-                nd.x += disp[i].x * scale;
-                nd.y += disp[i].y * scale;
-                nd.x = Math.max(pad, Math.min(w - pad, nd.x));
-                nd.y = Math.max(pad, Math.min(h - pad, nd.y));
-            });
+
+        const sampleDims = this._nodeDims(this._nodes[0]);
+        const nodeW = sampleDims.w;
+        const nodeH = sampleDims.h;
+        const hGap = 40;
+        const vGap = 50;
+
+        const cols = Math.max(1, Math.ceil(Math.sqrt(n * (nodeW + hGap) / (nodeH + vGap))));
+
+        for (let i = 0; i < n; i++) {
+            const row = Math.floor(i / cols);
+            const colInRow = i % cols;
+            // All rows go left-to-right
+            const col = colInRow;
+            const nd = this._nodes[i];
+            nd.x = (col + 0.5) * (nodeW + hGap) + hGap / 2;
+            nd.y = (row + 0.5) * (nodeH + vGap) + vGap / 2;
         }
+        // Store cols for U-turn edge drawing
+        this._snakeCols = cols;
     }
 
     // ── SVG Rendering ──────────────────────────────────────────────────────────
@@ -531,8 +637,15 @@ class LinkedListVisualizer extends BaseVisualizer {
         const { w, h } = this._canvasSize();
         const NS = 'http://www.w3.org/2000/svg';
 
+        // Compute tight viewBox from actual node positions + rect dimensions
+        const nodeExtents = this._nodes.map(nd => {
+            const dims = this._nodeDims(nd);
+            return { x: nd.x, y: nd.y, halfW: dims.w / 2, halfH: dims.h / 2 };
+        });
+        const vb = this._computeTightViewBox(nodeExtents);
+
         const svg = document.createElementNS(NS, 'svg');
-        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('viewBox', `${vb.vbX} ${vb.vbY} ${vb.vbW} ${vb.vbH}`);
         svg.setAttribute('width',  '100%');
         svg.setAttribute('height', '100%');
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -553,7 +666,9 @@ class LinkedListVisualizer extends BaseVisualizer {
 
         // Draw nodes
         const nodeRects = new Map(); // id -> {x, y, w, h}
-        for (const nd of this._nodes) {
+        this._elements = [];
+        for (let ni = 0; ni < this._nodes.length; ni++) {
+            const nd = this._nodes[ni];
             const dims = this._nodeDims(nd);
             const nx = nd.x - dims.w / 2;
             const ny = nd.y - dims.h / 2;
@@ -606,6 +721,11 @@ class LinkedListVisualizer extends BaseVisualizer {
 
             nodeGroup.appendChild(g);
 
+            this._elements.push({
+                index: ni, domRef: g, text: this._leafName(nd.id),
+                rect: { x: nx, y: ny, w: dims.w, h: dims.h }
+            });
+
             // Node drag
             this._bindNodeDrag(g, nd, svg, NS, nodeRects, edgeGroup, dims);
         }
@@ -615,32 +735,22 @@ class LinkedListVisualizer extends BaseVisualizer {
 
         this._svgContainer.appendChild(svg);
 
-        // Store desired content size; Manager will size the block and call onContainerResize.
-        this._desiredW = Math.max(w, 200);
-        this._desiredH = Math.max(h, 80);
-        const block = this.container.closest ? this.container.closest('.block') : null;
-        if (block) {
-            block.style.display = 'flex';
-            block.dataset.vizSized = '1';
-        }
+        // Store desired content size via base class (tight viewBox dimensions)
+        this._resizeBlock(vb.vbW, vb.vbH);
+
+        // Apply robust BBox fitting
+        this.fitSvg();
     }
 
-    _mkArrow(NS, id, color) {
-        const marker = document.createElementNS(NS, 'marker');
-        marker.setAttribute('id',           id);
-        marker.setAttribute('markerWidth',  '10');
-        marker.setAttribute('markerHeight', '7');
-        marker.setAttribute('refX',         '9');
-        marker.setAttribute('refY',         '3.5');
-        marker.setAttribute('orient',       'auto');
-        const poly = document.createElementNS(NS, 'polygon');
-        poly.setAttribute('points', '0 0, 10 3.5, 0 7');
-        poly.setAttribute('fill',   color);
-        marker.appendChild(poly);
-        return marker;
-    }
+    // _mkArrow inherited from GraphBaseVisualizer
 
     _drawAllEdges(NS, group, nodeRects) {
+        // Snake layout: use specialised straight + U-turn drawing
+        if (this._getEffectiveLayout() === 'snake' && this._snakeCols) {
+            this._drawSnakeEdges(NS, group, nodeRects);
+            return;
+        }
+
         const edgeSet = new Set(this._edges.map(e => `${e.from}|||${e.to}`));
         const drawn   = new Set();
         for (const edge of this._edges) {
@@ -666,6 +776,93 @@ class LinkedListVisualizer extends BaseVisualizer {
             } else {
                 this._drawCurved(NS, group, src, tgt, 0, edge, false);
                 drawn.add(revKey);
+            }
+        }
+    }
+
+    /**
+     * Draw edges for snake layout:
+     * - Same-row consecutive nodes: straight horizontal arrow
+     * - Row-wrap (last in row i → first in row i+1): U-turn path routed
+     *   outside the node area, going right-side → down → left-side.
+     */
+    _drawSnakeEdges(NS, group, nodeRects) {
+        const cols = this._snakeCols;
+        const idToIdx = this._nodeIndexById;
+
+        for (const edge of this._edges) {
+            const src = nodeRects.get(edge.from);
+            const tgt = nodeRects.get(edge.to);
+            if (!src || !tgt) continue;
+
+            const srcIdx = idToIdx.get(edge.from);
+            const tgtIdx = idToIdx.get(edge.to);
+            if (srcIdx === undefined || tgtIdx === undefined) continue;
+
+            const srcRow = Math.floor(srcIdx / cols);
+            const tgtRow = Math.floor(tgtIdx / cols);
+
+            if (srcRow === tgtRow) {
+                // Same row: straight horizontal arrow from right edge of src to left edge of tgt
+                const x1 = src.x + src.w;
+                const y1 = src.y + src.h / 2;
+                const x2 = tgt.x;
+                const y2 = tgt.y + tgt.h / 2;
+                const line = document.createElementNS(NS, 'line');
+                line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                line.setAttribute('class', 'viz-graph-edge');
+                if (this.directed) line.setAttribute('marker-end', 'url(#ll-arrow)');
+                group.appendChild(line);
+            } else {
+                // Row wrap: U-turn path
+                // Route: right of src → down outside → left to reach tgt
+                const gap = 20; // clearance outside nodes
+                // Start: right edge of src, vertical center
+                const x1 = src.x + src.w;
+                const y1 = src.y + src.h / 2;
+                // End: left edge of tgt, vertical center
+                const x4 = tgt.x;
+                const y4 = tgt.y + tgt.h / 2;
+
+                // Find the rightmost x among all nodes to route the U-turn outside
+                let maxRight = 0;
+                for (const [, r] of nodeRects) {
+                    maxRight = Math.max(maxRight, r.x + r.w);
+                }
+                const turnX = maxRight + gap;
+
+                // Midpoint Y between the two rows
+                const midY = (src.y + src.h + tgt.y) / 2;
+
+                // Find the leftmost x among all nodes
+                let minLeft = Infinity;
+                for (const [, r] of nodeRects) {
+                    minLeft = Math.min(minLeft, r.x);
+                }
+                const leftX = minLeft - gap;
+
+                // Path: right → turn right → down to midY → left across → down to tgt row → right to tgt
+                const d = `M ${x1} ${y1} L ${turnX} ${y1} L ${turnX} ${midY} L ${leftX} ${midY} L ${leftX} ${y4} L ${x4} ${y4}`;
+
+                const path = document.createElementNS(NS, 'path');
+                path.setAttribute('d', d);
+                path.setAttribute('class', 'viz-graph-edge');
+                path.setAttribute('fill', 'none');
+                if (this.directed) path.setAttribute('marker-end', 'url(#ll-arrow)');
+                group.appendChild(path);
+            }
+
+            if (edge.label) {
+                const mx = (src.cx + tgt.cx) / 2;
+                const my = (src.cy + tgt.cy) / 2;
+                const lbl = document.createElementNS(NS, 'text');
+                lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
+                lbl.setAttribute('class', 'viz-graph-edge-label');
+                lbl.setAttribute('text-anchor', 'middle');
+                lbl.setAttribute('dominant-baseline', 'central');
+                lbl.textContent = edge.label;
+                group.appendChild(lbl);
             }
         }
     }
@@ -758,13 +955,7 @@ class LinkedListVisualizer extends BaseVisualizer {
         });
     }
 
-    /** Returns the desired content size for Manager when sizing the block. */
-    getDesiredSize() {
-        return { w: this._desiredW || 300, h: this._desiredH || 200 };
-    }
-
-    /** No-op: the SVG scales automatically via viewBox + 100% width/height. */
-    onContainerResize(_w, _h) {}
+    // getDesiredSize, onContainerResize inherited from GraphBaseVisualizer
 }
 
 if (typeof visualizerRegistry !== 'undefined') {

@@ -57,7 +57,8 @@ class VisualizerManager {
                         type:   b.type   || 'Text',
                         w:      b.w      || null,
                         h:      b.h      || null,
-                        params: b.params || {}
+                        params: b.params || {},
+                        modifiers: b.modifiers || []
                     });
                 }
             });
@@ -69,6 +70,8 @@ class VisualizerManager {
             if (variable) {
                 entry.variableData = variable;
                 entry.visualizer.update(variable);
+                // Apply modifiers after render
+                this._applyModifiers(entry, varMap);
             }
         });
 
@@ -273,6 +276,33 @@ class VisualizerManager {
         typeRow.appendChild(copyImgBtn);
         popup.appendChild(typeRow);
 
+        // ── Tab bar ──
+        const tabBar = document.createElement('div');
+        tabBar.className = 'popup-tab-bar';
+        const tabNames = ['Basic', 'Modification', 'Advanced'];
+        const pages = {};
+        tabNames.forEach((name, idx) => {
+            const tab = document.createElement('button');
+            tab.className = 'popup-tab' + (idx === 0 ? ' popup-tab--active' : '');
+            tab.textContent = name;
+            tab.dataset.page = name;
+            tab.addEventListener('mousedown', e => e.stopPropagation());
+            tab.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tabBar.querySelectorAll('.popup-tab').forEach(t => t.classList.remove('popup-tab--active'));
+                tab.classList.add('popup-tab--active');
+                Object.values(pages).forEach(p => p.classList.remove('popup-page--active'));
+                pages[name].classList.add('popup-page--active');
+            });
+            tabBar.appendChild(tab);
+
+            const page = document.createElement('div');
+            page.className = 'popup-page' + (idx === 0 ? ' popup-page--active' : '');
+            pages[name] = page;
+        });
+        popup.appendChild(tabBar);
+        tabNames.forEach(name => popup.appendChild(pages[name]));
+
         // Close popup when clicking outside both block and popup
         // (handled globally via _closeActivePopup called on new open)
         this.dashboard.appendChild(popup);
@@ -286,22 +316,35 @@ class VisualizerManager {
              const savedParams = known ? (known.params || {}) : {};
              if (visualizer.setParams) visualizer.setParams(savedParams);
 
-             // Toolbar for this visualizer goes into the popup (not the block)
+             // Toolbar for this visualizer goes into the Basic page
              const toolbar = visualizer.getToolbar ? visualizer.getToolbar() : null;
              if (toolbar) {
                  toolbar.classList.add('block-toolbar');
-                 popup.appendChild(toolbar);
+                 pages['Basic'].appendChild(toolbar);
+             }
+
+             // Modifier section in the Modification page
+             const modSection = document.createElement('div');
+             modSection.className = 'modifier-section';
+             pages['Modification'].appendChild(modSection);
+
+             // Advanced settings from visualizer (if provided)
+             if (visualizer.getAdvancedSettingsUI) {
+                 const advUI = visualizer.getAdvancedSettingsUI();
+                 if (advUI) pages['Advanced'].appendChild(advUI);
              }
 
              visualizer.update(variable);
 
              // Record in knownBlocks (creates entry if first time)
+             const existingMods = known ? (known.modifiers || []) : [];
              this.knownBlocks.set(path, {
                  x: parseInt(block.style.left) || 0,
                  y: parseInt(block.style.top)  || 0,
                  type: safeType,
                  w: null, h: null,
-                 params: visualizer.getParams ? visualizer.getParams() : {}
+                 params: visualizer.getParams ? visualizer.getParams() : {},
+                 modifiers: existingMods
              });
 
              // ── Size block: visualizer reports desired size → Manager clamps to dashboard → calls onContainerResize
@@ -327,6 +370,15 @@ class VisualizerManager {
              });
              ro.observe(block);
 
+             // ResizeObserver on popup: re-anchor when popup size changes
+             const popupRO = new ResizeObserver(() => {
+                 if (this.activePopupPath === path) {
+                     const entry2 = this.blocks.get(path);
+                     if (entry2) this._showPopup(entry2);
+                 }
+             });
+             popupRO.observe(popup);
+
              this.blocks.set(path, {
                  element:         block,
                  visualizer:      visualizer,
@@ -334,8 +386,18 @@ class VisualizerManager {
                  variableData:    variable,
                  type:            safeType,
                  popup:           popup,
-                 resizeObserver:  ro
+                 resizeObserver:  ro,
+                 popupResizeObserver: popupRO,
+                 modifierInstances: []
              });
+             this._instantiateModifiers(this.blocks.get(path), path);
+             this._refreshModifierUI(path);
+             // Apply modifiers immediately after creation
+             const createdEntry = this.blocks.get(path);
+             if (createdEntry) {
+                 const vm = window.controller ? window.controller.varMap : new Map();
+                 this._applyModifiers(createdEntry, vm);
+             }
         }
     }
 
@@ -394,11 +456,13 @@ class VisualizerManager {
             return ix * iy;
         };
 
+        // anchorBottom: true means the popup is above the block and should be
+        // anchored at its bottom edge so that when resizing the popup grows upward.
         const candidates = [
-            { left: blockLeft,                 top: blockTop - popupH - GAP },
-            { left: blockLeft,                 top: blockTop + blockH + GAP },
-            { left: blockLeft - popupW - GAP,  top: blockTop },
-            { left: blockLeft + blockW + GAP,  top: blockTop }
+            { left: blockLeft,                 top: blockTop - popupH - GAP, anchorBottom: true },
+            { left: blockLeft,                 top: blockTop + blockH + GAP, anchorBottom: false },
+            { left: blockLeft - popupW - GAP,  top: blockTop,                anchorBottom: false },
+            { left: blockLeft + blockW + GAP,  top: blockTop,                anchorBottom: false }
         ];
 
         const scored = candidates.map((c, idx) => {
@@ -421,14 +485,22 @@ class VisualizerManager {
             if (!overlapSelf && overlapOthersCount === 0) rank = 0;
             else if (!overlapSelf) rank = 1;
 
-            return { rank, totalOverlapArea, idx, left, top };
+            return { rank, totalOverlapArea, idx, left, top, anchorBottom: c.anchorBottom };
         });
 
         scored.sort((a, b) => (a.rank - b.rank) || (a.totalOverlapArea - b.totalOverlapArea) || (a.idx - b.idx));
         const best = scored[0];
 
-        popup.style.left       = `${best.left}px`;
-        popup.style.top        = `${best.top}px`;
+        popup.style.left = `${best.left}px`;
+        if (best.anchorBottom) {
+            // Anchor from bottom: the bottom edge of the popup stays fixed
+            // at blockTop - GAP so the popup grows upward when its size changes.
+            popup.style.top  = '';
+            popup.style.bottom = `${Math.max(0, dashH - blockTop + GAP)}px`;
+        } else {
+            popup.style.bottom = '';
+            popup.style.top    = `${best.top}px`;
+        }
         popup.style.visibility = '';
     }
 
@@ -547,24 +619,33 @@ class VisualizerManager {
             const svgEl = block.querySelector('svg');
             let blob;
             if (svgEl) {
-                // SVG path: clone SVG with all computed styles inlined
                 blob = await this._svgToBlob(svgEl, block);
             } else {
-                // HTML path: use foreignObject approach with proper CSS
-                blob = await this._htmlToBlob(block);
+                blob = await this._htmlToBlobFallback(block);
             }
-            if (blob && navigator.clipboard && navigator.clipboard.write) {
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            if (!blob) { setTemp('✗'); return; }
+
+            // Try clipboard API first (works in regular browser, may fail in webview)
+            let copied = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    copied = true;
+                }
+            } catch (_) { /* clipboard API unavailable or blocked in webview */ }
+
+            if (copied) {
                 setTemp('✓');
-            } else if (blob) {
-                // Fallback: trigger file download
+            } else {
+                // Fallback: trigger file download (works in both browser and webview)
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url; a.download = 'block.png'; a.click();
+                a.href = url; a.download = 'block.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 setTemp('↓');
-            } else {
-                setTemp('✗');
             }
         } catch (err) {
             console.error('[YTP] captureBlockImage failed:', err);
@@ -644,109 +725,9 @@ class VisualizerManager {
     }
 
     /**
-     * Capture HTML block to PNG blob using foreignObject SVG technique.
-     * This closely follows the html-to-image library approach.
-     */
-    _htmlToBlob(block) {
-        return new Promise((resolve) => {
-            const w = block.offsetWidth  || 400;
-            const h = block.offsetHeight || 300;
-            
-            // Clone the block and inline all computed styles
-            const clone = block.cloneNode(true);
-            this._inlineComputedStyles(block, clone);
-            
-            // Remove interactive elements that cause issues
-            clone.querySelectorAll('input, button, select, textarea').forEach(el => {
-                el.disabled = true;
-            });
-            
-            // Get the HTML content with properly escaped characters
-            const htmlContent = new XMLSerializer().serializeToString(clone);
-            
-            // Create foreignObject SVG wrapper
-            const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-                <foreignObject x="0" y="0" width="100%" height="100%">
-                    ${htmlContent}
-                </foreignObject>
-            </svg>`;
-            
-            const blobIn = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blobIn);
-            
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const scale = 2;
-                canvas.width = w * scale;
-                canvas.height = h * scale;
-                const ctx = canvas.getContext('2d');
-                ctx.scale(scale, scale);
-                ctx.fillStyle = '#32323e';
-                ctx.fillRect(0, 0, w, h);
-                ctx.drawImage(img, 0, 0, w, h);
-                URL.revokeObjectURL(url);
-                canvas.toBlob(resolve, 'image/png');
-            };
-            img.onerror = (e) => { 
-                console.error('[YTP] HTML render error:', e);
-                URL.revokeObjectURL(url); 
-                // Fallback to simple canvas approach
-                this._htmlToBlobFallback(block).then(resolve);
-            };
-            img.src = url;
-        });
-    }
-
-    /**
-     * Recursively inline all computed styles from source to clone.
-     */
-    _inlineComputedStyles(source, clone) {
-        if (source.nodeType !== 1) return;
-        
-        const computed = window.getComputedStyle(source);
-        // Key properties to inline for visual fidelity
-        const props = [
-            'background-color', 'background', 'color', 'font-family', 'font-size', 
-            'font-weight', 'font-style', 'text-align', 'text-decoration', 'line-height',
-            'border', 'border-color', 'border-width', 'border-style', 'border-radius',
-            'padding', 'margin', 'width', 'height', 'min-width', 'min-height',
-            'max-width', 'max-height', 'display', 'flex-direction', 'justify-content',
-            'align-items', 'flex-wrap', 'gap', 'overflow', 'position', 'top', 'left',
-            'right', 'bottom', 'box-sizing', 'opacity', 'visibility', 'white-space',
-            'word-wrap', 'word-break', 'fill', 'stroke', 'stroke-width'
-        ];
-        
-        const styles = [];
-        props.forEach(prop => {
-            const val = computed.getPropertyValue(prop);
-            if (val && val !== 'initial' && val !== 'none' && val !== 'auto') {
-                styles.push(`${prop}:${val}`);
-            }
-        });
-        
-        // Also copy existing inline styles
-        if (source.style && source.style.cssText) {
-            styles.push(source.style.cssText);
-        }
-        
-        clone.setAttribute('style', styles.join(';'));
-        
-        // Set xmlns for HTML elements in SVG foreignObject
-        if (!clone.getAttribute('xmlns')) {
-            clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-        }
-        
-        // Recurse
-        for (let i = 0; i < source.children.length; i++) {
-            if (clone.children[i]) {
-                this._inlineComputedStyles(source.children[i], clone.children[i]);
-            }
-        }
-    }
-
-    /**
-     * Simple fallback using manual canvas rendering.
+     * Capture HTML block to PNG blob using canvas-based rendering.
+     * foreignObject SVG approach is unreliable (XHTML serialization issues,
+     * blocked by CSP in VSCode webview), so we render directly to canvas.
      */
     _htmlToBlobFallback(block) {
         return new Promise((resolve) => {
@@ -758,66 +739,131 @@ class VisualizerManager {
             canvas.height = h * scale;
             const ctx = canvas.getContext('2d');
             ctx.scale(scale, scale);
-            
-            // Background
+
+            // Block background
             ctx.fillStyle = '#32323e';
             ctx.fillRect(0, 0, w, h);
-            
+
             // Header
             const header = block.querySelector('.block-header');
+            const headerH = header ? header.offsetHeight || 30 : 0;
             if (header) {
                 ctx.fillStyle = '#2d2d2d';
-                ctx.fillRect(0, 0, w, 30);
+                ctx.fillRect(0, 0, w, headerH);
                 ctx.fillStyle = '#ccc';
                 ctx.font = '13px Consolas, monospace';
                 const title = header.querySelector('.block-title');
-                if (title) ctx.fillText(title.textContent || '', 10, 20);
+                if (title) ctx.fillText(title.textContent || '', 10, headerH * 0.65);
             }
-            
-            // Content - simplified rendering
+
+            // Content rendering
             const content = block.querySelector('.block-content');
             if (content) {
-                const headerH = header ? 30 : 0;
-                ctx.fillStyle = '#d4e8ff';
-                ctx.font = '12px Consolas, monospace';
-                
-                // Render array boxes if present
+                const contentRect = content.getBoundingClientRect();
+
+                // Array boxes
                 const boxes = content.querySelectorAll('.viz-array-box');
                 if (boxes.length > 0) {
-                    const contentRect = content.getBoundingClientRect();
                     boxes.forEach(box => {
                         const rect = box.getBoundingClientRect();
                         const x = rect.left - contentRect.left;
                         const y = rect.top - contentRect.top + headerH;
                         const bw = rect.width;
                         const bh = rect.height;
-                        
+
                         ctx.fillStyle = '#1e3a5f';
                         ctx.fillRect(x, y, bw, bh);
                         ctx.strokeStyle = '#6e9ccf';
                         ctx.lineWidth = 1.5;
                         ctx.strokeRect(x, y, bw, bh);
-                        
+
                         const valueEl = box.querySelector('.viz-array-value');
                         if (valueEl) {
                             ctx.fillStyle = '#d4e8ff';
+                            ctx.font = '12px Consolas, monospace';
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
-                            ctx.fillText(valueEl.textContent || '', x + bw/2, y + bh*0.4);
+                            ctx.fillText(valueEl.textContent || '', x + bw / 2, y + bh * 0.4);
+                        }
+                        const idxEl = box.querySelector('.viz-array-index');
+                        if (idxEl) {
+                            ctx.fillStyle = '#888';
+                            ctx.font = '9px Consolas, monospace';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'top';
+                            ctx.fillText(idxEl.textContent || '', x + bw / 2, y + bh + 2);
                         }
                     });
-                } else {
-                    // Plain text
+                }
+
+                // Matrix rows
+                const matRows = content.querySelectorAll('.viz-matrix-row');
+                if (matRows.length > 0) {
+                    matRows.forEach(row => {
+                        const cells = row.querySelectorAll('.viz-array-box');
+                        cells.forEach(cell => {
+                            const rect = cell.getBoundingClientRect();
+                            const x = rect.left - contentRect.left;
+                            const y = rect.top - contentRect.top + headerH;
+                            const bw = rect.width;
+                            const bh = rect.height;
+                            ctx.fillStyle = '#1e3a5f';
+                            ctx.fillRect(x, y, bw, bh);
+                            ctx.strokeStyle = '#6e9ccf';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(x, y, bw, bh);
+                            const val = cell.querySelector('.viz-array-value');
+                            if (val) {
+                                ctx.fillStyle = '#d4e8ff';
+                                ctx.font = '11px Consolas, monospace';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(val.textContent || '', x + bw / 2, y + bh / 2);
+                            }
+                        });
+                    });
+                }
+
+                // Heap circles
+                const heapNodes = content.querySelectorAll('.viz-graph-node');
+                if (heapNodes.length > 0) {
+                    heapNodes.forEach(node => {
+                        const rect = node.getBoundingClientRect();
+                        const cx = rect.left - contentRect.left + rect.width / 2;
+                        const cy = rect.top - contentRect.top + headerH + rect.height / 2;
+                        const r = Math.min(rect.width, rect.height) / 2;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                        ctx.fillStyle = '#1e3a5f';
+                        ctx.fill();
+                        ctx.strokeStyle = '#6e9ccf';
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        const text = node.querySelector('text');
+                        if (text) {
+                            ctx.fillStyle = '#d4e8ff';
+                            ctx.font = '12px Consolas, monospace';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(text.textContent || '', cx, cy);
+                        }
+                    });
+                }
+
+                // Plain text fallback (e.g., TextVisualizer)
+                if (boxes.length === 0 && matRows.length === 0 && heapNodes.length === 0) {
                     const text = content.textContent || '';
+                    ctx.fillStyle = '#d4e8ff';
+                    ctx.font = '12px Consolas, monospace';
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'top';
-                    const lines = text.split('\n').slice(0, 20);
+                    const lines = text.split('\n').slice(0, 30);
                     lines.forEach((line, i) => {
-                        ctx.fillText(line.substring(0, 80), 10, headerH + 10 + i * 16);
+                        ctx.fillText(line.substring(0, 100), 10, headerH + 10 + i * 16);
                     });
                 }
             }
-            
+
             canvas.toBlob(resolve, 'image/png');
         });
     }
@@ -873,20 +919,29 @@ class VisualizerManager {
 
         if (entry.visualizer.dispose) entry.visualizer.dispose();
 
-        // Remove existing toolbar from the popup (not from the block)
-        const existingToolbar = entry.popup && entry.popup.querySelector('.block-toolbar');
-        if (existingToolbar) existingToolbar.remove();
+        // Clear Basic and Advanced pages in popup; keep Modification intact
+        const popupPages = entry.popup ? entry.popup.querySelectorAll('.popup-page') : [];
+        const basicPage    = popupPages[0] || null;
+        const advancedPage = popupPages[2] || null;
+        if (basicPage)    basicPage.innerHTML = '';
+        if (advancedPage) advancedPage.innerHTML = '';
 
         entry.contentElement.innerHTML = '';
 
         if (typeof visualizerRegistry !== 'undefined') {
             const newViz = visualizerRegistry.create(newType, entry.contentElement);
 
-            // Toolbar goes into the popup
+            // Toolbar goes into the Basic page
             const newToolbar = newViz.getToolbar ? newViz.getToolbar() : null;
-            if (newToolbar && entry.popup) {
+            if (newToolbar && basicPage) {
                 newToolbar.classList.add('block-toolbar');
-                entry.popup.appendChild(newToolbar);
+                basicPage.appendChild(newToolbar);
+            }
+
+            // Advanced settings go into the Advanced page
+            if (newViz.getAdvancedSettingsUI && advancedPage) {
+                const advUI = newViz.getAdvancedSettingsUI();
+                if (advUI) advancedPage.appendChild(advUI);
             }
 
             // Restore saved params for this new type if any were previously used
@@ -923,9 +978,10 @@ class VisualizerManager {
             }
             // Close popup if it was open for this block
             if (this.activePopupPath === path) this._closeActivePopup();
-            // Remove popup sibling and disconnect ResizeObserver
+            // Remove popup sibling and disconnect ResizeObservers
             if (entry.popup) entry.popup.remove();
             if (entry.resizeObserver) entry.resizeObserver.disconnect();
+            if (entry.popupResizeObserver) entry.popupResizeObserver.disconnect();
             entry.element.remove();
             this.blocks.delete(path);
         }
@@ -934,6 +990,180 @@ class VisualizerManager {
             if (empty) /** @type {HTMLElement} */(empty).style.display = 'block';
         }
     }
+
+    // ── Modifier UI in popup ──────────────────────────────────────────────────
+
+    /**
+     * Rebuild the modifier list section inside a block's popup.
+     * @param {string} path  Block variable path
+     */
+    _refreshModifierUI(path, expandIndex = -1) {
+        const entry = this.blocks.get(path);
+        if (!entry) return;
+        const modSection = entry.popup.querySelector('.modifier-section');
+        if (!modSection) return;
+        modSection.innerHTML = '';
+
+        const kb = this.knownBlocks.get(path);
+        const modDefs = kb ? (kb.modifiers || []) : [];
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'modifier-section-header';
+        header.textContent = 'Modifiers';
+        modSection.appendChild(header);
+
+        // Modifier rows
+        modDefs.forEach((mDef, idx) => {
+            const row = document.createElement('div');
+            row.className = 'modifier-row';
+
+            const tag = document.createElement('span');
+            tag.className = 'modifier-tag';
+            tag.textContent = `[${mDef.type}]`;
+
+            const varName = document.createElement('span');
+            varName.className = 'modifier-var';
+            varName.textContent = mDef.varPath || '—';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'block-btn modifier-remove';
+            removeBtn.textContent = '×';
+            removeBtn.onmousedown = (e) => e.stopPropagation();
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.removeModifier(path, idx);
+                this._refreshModifierUI(path);
+            };
+
+            row.appendChild(tag);
+            row.appendChild(varName);
+            row.appendChild(removeBtn);
+
+            // Expand/collapse settings on click
+            const mi = entry.modifierInstances ? entry.modifierInstances[idx] : null;
+            if (mi && mi.instance.getSettingsUI) {
+                row.style.cursor = 'pointer';
+                const expandSettings = () => {
+                    const existing = row.nextElementSibling;
+                    if (existing && existing.classList.contains('modifier-settings-panel')) {
+                        existing.remove();
+                        return;
+                    }
+                    // Collapse any other expanded settings
+                    modSection.querySelectorAll('.modifier-settings-panel').forEach(p => p.remove());
+                    const panel = mi.instance.getSettingsUI(() => {
+                        // Settings changed — persist and re-apply
+                        mDef.settings = mi.instance.getParams();
+                        const vm = window.controller ? window.controller.varMap : new Map();
+                        this._applyModifiers(entry, vm);
+                        if (window.controller) window.controller.saveState();
+                    });
+                    if (panel) {
+                        panel.classList.add('modifier-settings-panel');
+                        panel.onmousedown = (ev) => ev.stopPropagation();
+                        row.after(panel);
+                    }
+                };
+                row.addEventListener('click', (e) => {
+                    if (e.target === removeBtn) return;
+                    e.stopPropagation();
+                    expandSettings();
+                });
+                // Auto-expand settings for newly added modifier
+                if (idx === expandIndex) {
+                    expandSettings();
+                }
+            }
+
+            modSection.appendChild(row);
+        });
+
+        // "+ Add modifier" button
+        const addBtn = document.createElement('button');
+        addBtn.className = 'block-btn modifier-add-btn';
+        addBtn.textContent = '+ Add modifier';
+        addBtn.onmousedown = (e) => e.stopPropagation();
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            this._showAddModifierPicker(path, modSection, addBtn);
+        };
+        modSection.appendChild(addBtn);
+    }
+
+    /**
+     * Show a small inline picker to choose modifier type and bind variable.
+     */
+    _showAddModifierPicker(path, modSection, addBtn) {
+        // Remove existing picker if any
+        const existing = modSection.querySelector('.modifier-picker');
+        if (existing) { existing.remove(); return; }
+
+        const picker = document.createElement('div');
+        picker.className = 'modifier-picker';
+        picker.onmousedown = (e) => e.stopPropagation();
+
+        // Modifier type selector
+        const typeGroup = document.createElement('div');
+        typeGroup.className = 'viz-control';
+        const typeLabel = document.createElement('span');
+        typeLabel.className = 'viz-ctrl-label';
+        typeLabel.textContent = 'Type: ';
+        const typeSelect = document.createElement('select');
+        typeSelect.className = 'viz-select';
+        if (typeof modifierRegistry !== 'undefined') {
+            modifierRegistry.getAllTypes().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t; opt.textContent = t;
+                typeSelect.appendChild(opt);
+            });
+        }
+        typeGroup.appendChild(typeLabel);
+        typeGroup.appendChild(typeSelect);
+        picker.appendChild(typeGroup);
+
+        // Variable selector — populated from the current varMap
+        const varGroup = document.createElement('div');
+        varGroup.className = 'viz-control';
+        const varLabel = document.createElement('span');
+        varLabel.className = 'viz-ctrl-label';
+        varLabel.textContent = 'Var: ';
+        const varSelect = document.createElement('select');
+        varSelect.className = 'viz-select';
+        // Gather available variable paths from controller
+        if (window.controller && window.controller.varMap) {
+            window.controller.varMap.forEach((v, vPath) => {
+                const opt = document.createElement('option');
+                opt.value = vPath; opt.textContent = v.name || vPath;
+                varSelect.appendChild(opt);
+            });
+        }
+        varGroup.appendChild(varLabel);
+        varGroup.appendChild(varSelect);
+        picker.appendChild(varGroup);
+
+        // Confirm button
+        const okBtn = document.createElement('button');
+        okBtn.className = 'block-btn';
+        okBtn.textContent = 'Add';
+        okBtn.onclick = (e) => {
+            e.stopPropagation();
+            const modType = typeSelect.value;
+            const varPath = varSelect.value;
+            if (modType && varPath) {
+                this.addModifier(path, modType, varPath);
+                const kb2 = this.knownBlocks.get(path);
+                const newIdx = kb2 && kb2.modifiers ? kb2.modifiers.length - 1 : -1;
+                this._refreshModifierUI(path, newIdx);
+            }
+            picker.remove();
+        };
+        picker.appendChild(okBtn);
+
+        addBtn.before(picker);
+    }
+
+    // ── Layout serialization ──────────────────────────────────────────────────
 
     getLayout() {
         // Return ALL knownBlocks (active and inactive) so state is fully preserved.
@@ -957,9 +1187,97 @@ class VisualizerManager {
                 w:      kb.w    || null,
                 h:      kb.h    || null,
                 params: kb.params || {},
+                modifiers: kb.modifiers || [],
                 active: this.blocks.has(path)
             });
         });
         return layout;
+    }
+
+    // ── Modifier helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Apply all modifiers attached to a block entry.
+     * Called after visualizer.update() produces fresh element descriptors.
+     * @param {Object} entry  Block entry from this.blocks
+     * @param {Map} varMap    Current variable map
+     */
+    _applyModifiers(entry, varMap) {
+        if (!entry.modifierInstances || entry.modifierInstances.length === 0) return;
+        const elements = entry.visualizer.getElements ? entry.visualizer.getElements() : [];
+        if (elements.length === 0) return;
+        for (const mi of entry.modifierInstances) {
+            mi.instance.clear(elements);
+            const modData = mi.varPath ? varMap.get(mi.varPath) : null;
+            mi.instance.apply(elements, modData);
+        }
+    }
+
+    /**
+     * Instantiate modifier objects for a block entry from its knownBlocks config.
+     * Called once when the block is first created / restored.
+     * @param {Object} entry  Block entry
+     * @param {string} path   Variable path
+     */
+    _instantiateModifiers(entry, path) {
+        const kb = this.knownBlocks.get(path);
+        if (!kb || !kb.modifiers || kb.modifiers.length === 0) {
+            entry.modifierInstances = [];
+            return;
+        }
+        entry.modifierInstances = kb.modifiers.map(mDef => {
+            const ModCls = typeof modifierRegistry !== 'undefined'
+                ? modifierRegistry.get(mDef.type) : null;
+            if (!ModCls) return null;
+            const inst = new ModCls(mDef.settings || {});
+            return { type: mDef.type, varPath: mDef.varPath, instance: inst };
+        }).filter(Boolean);
+    }
+
+    /**
+     * Add a modifier to a block.
+     * @param {string} path       Block's variable path
+     * @param {string} modType    Modifier type key (e.g. 'pointer', 'color')
+     * @param {string} varPath    Variable path the modifier reads from
+     * @param {Object} settings   Initial settings
+     */
+    addModifier(path, modType, varPath, settings = {}) {
+        const kb = this.knownBlocks.get(path);
+        if (!kb) return;
+        if (!kb.modifiers) kb.modifiers = [];
+        kb.modifiers.push({ type: modType, varPath, settings });
+
+        const entry = this.blocks.get(path);
+        if (entry) {
+            const ModCls = typeof modifierRegistry !== 'undefined'
+                ? modifierRegistry.get(modType) : null;
+            if (ModCls) {
+                if (!entry.modifierInstances) entry.modifierInstances = [];
+                const inst = new ModCls(settings);
+                entry.modifierInstances.push({ type: modType, varPath, instance: inst });
+            }
+            // Apply modifiers immediately
+            const vm = window.controller ? window.controller.varMap : new Map();
+            this._applyModifiers(entry, vm);
+        }
+        if (window.controller) window.controller.saveState();
+    }
+
+    /**
+     * Remove a modifier from a block by index.
+     * @param {string} path   Block's variable path
+     * @param {number} idx    Index in the modifier list
+     */
+    removeModifier(path, idx) {
+        const kb = this.knownBlocks.get(path);
+        if (!kb || !kb.modifiers) return;
+        kb.modifiers.splice(idx, 1);
+
+        const entry = this.blocks.get(path);
+        if (entry && entry.modifierInstances) {
+            const removed = entry.modifierInstances.splice(idx, 1);
+            if (removed[0] && removed[0].instance.dispose) removed[0].instance.dispose();
+        }
+        if (window.controller) window.controller.saveState();
     }
 }
