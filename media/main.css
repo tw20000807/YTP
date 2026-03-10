@@ -490,8 +490,6 @@ body {
 /* ── Shared Visualizer Controls ── */
 .viz-control {
     display: flex;
-    flex: 1 1 auto;          /* grow to fill toolbar row */
-    min-width: 0;
     align-items: center;
     font-size: 0.85em;
     color: var(--text-color);
@@ -505,51 +503,17 @@ body {
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
-    padding: 1px 4px;
-    font-size: 0.9em;
+    padding: 1px 4px; 
+    font-size: 0.85em; 
+    width: 60px;      
+    outline: none;
+    border-radius: 0;  
 }
 
-.viz-input:focus {
+.viz-array-input:focus {
     outline: 1px solid var(--highlight-color);
     border-color: var(--highlight-color);
 }
-
-.viz-select {
-    flex: 1;                 /* fill remaining label width */
-    min-width: 36px;
-    width: 0;                /* allow shrinking below browser default */
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1px 4px;
-    font-size: 0.9em;
-}
-
-.viz-select:focus {
-    outline: 1px solid var(--highlight-color);
-    border-color: var(--highlight-color);
-}
-
-.viz-toggle {
-    flex: 1;                 /* expand to fill label just like select */
-    min-width: 36px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1px 8px;
-    font-size: 0.9em;
-    cursor: pointer;
-    vertical-align: middle;
-    line-height: normal;
-}
-
-.viz-toggle--active {
-    background-color: #1e3a5f;
-    border-color: #6e9ccf;
-    color: #d4e8ff;
-}
-
-/* Array Visualizer */
 
 .viz-array-container {
     display: flex;
@@ -626,7 +590,23 @@ body {
     background-color: #b8860b;
     color: #1e1e1e;
 }
+/* -----------modify----------- */
 
+/* 當這個 Index 上面有指標 (Pointer) 時的強化樣式 */
+.viz-array-index--pointer {
+    color: #ffd700; /* 變成亮眼的金色 */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); /* 增加一點點發光感 */
+    transform: scale(1.1); /* 稍微放大一點點 */
+}
+
+
+/* 當 Index 被標註時，格子的邊框也可以跟著變色 */
+.viz-array-index--pointer + .viz-array-value {
+    color: #fff;
+}
+
+/* --------------------- */
 /* -- matrix -- */
 /* Matrix Visualizer Container */
 .viz-matrix-grid {
@@ -900,28 +880,3 @@ body {
     flex-shrink: 0;
 }
 .viz-ll-remove-btn:hover { color: #e07070; }
-
-/* ── Custom Dropdown (replaces native datalist for webview compat) ────── */
-.ytp-custom-dropdown {
-    position: absolute;
-    z-index: 99999;
-    background: var(--vscode-editorWidget-background, #252526);
-    border: 1px solid var(--vscode-editorWidget-border, #454545);
-    border-radius: 3px;
-    max-height: 160px;
-    overflow-y: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    font-family: Consolas, 'Courier New', monospace;
-    font-size: 12px;
-}
-.ytp-custom-dropdown-item {
-    padding: 4px 8px;
-    color: var(--vscode-foreground, #ccc);
-    cursor: pointer;
-    white-space: nowrap;
-}
-.ytp-custom-dropdown-item:hover,
-.ytp-custom-dropdown-item.ytp-dropdown-active {
-    background: var(--highlight-color, #007acc);
-    color: #fff;
-}

@@ -85,7 +85,8 @@ class VisualizerManager {
                         b.path, variable,
                         b.x !== undefined ? b.x : null,
                         b.y !== undefined ? b.y : null,
-                        b.type || 'Text'
+                        b.type || 'Text',
+                        varMap
                     );
                 }
             });
@@ -105,7 +106,7 @@ class VisualizerManager {
     }
 
     // @ts-ignore
-    createBlockWithPath(path, variable, x = null, y = null, type = 'Text') {
+    createBlockWithPath(path, variable, x = null, y = null, type = 'Text', allVariable) {
         if (!this.dashboard) return;
         if (this.blocks.has(path)) return;
 
@@ -257,7 +258,7 @@ class VisualizerManager {
         }
         typeSelect.onchange = (e) => {
             // @ts-ignore
-            this.switchVisualizer(path, e.target.value);
+            this.switchVisualizer(path, e.target.value, allVariable);
         };
         typeLabel.appendChild(typeSelect);
         typeRow.appendChild(typeLabel);
@@ -334,7 +335,7 @@ class VisualizerManager {
                  if (advUI) pages['Advanced'].appendChild(advUI);
              }
 
-             visualizer.update(variable);
+             visualizer.update(variable, allVariable);
 
              // Record in knownBlocks (creates entry if first time)
              const existingMods = known ? (known.modifiers || []) : [];
@@ -905,7 +906,7 @@ class VisualizerManager {
     }
 
     // @ts-ignore
-    switchVisualizer(path, newType) {
+    switchVisualizer(path, newType, allVariable) {
         const entry = this.blocks.get(path);
         if (!entry) return;
 
@@ -947,7 +948,7 @@ class VisualizerManager {
             // Restore saved params for this new type if any were previously used
             if (newViz.setParams && kb && kb.params) newViz.setParams(kb.params);
 
-            newViz.update(entry.variableData);
+            newViz.update(entry.variableData, allVariable);
             entry.visualizer = newViz;
             entry.type = newType;
 

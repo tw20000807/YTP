@@ -7,6 +7,7 @@ class ArrayVisualizer extends BaseVisualizer {
         this.base = 0;
         this.limit = null; // null = show all (inclusive end index)
         this.indexLabel = 'index'; // 'index' | 'name'
+        this.allVariable = null;
         this.variable = null;
         this._prevValues = new Map(); // index -> previous value string
         this._dynBoxW = null; // dynamic box width set by onContainerResize
@@ -14,6 +15,7 @@ class ArrayVisualizer extends BaseVisualizer {
         this._lastRows = 1; // track rows for hysteresis
         this.dataFields = []; // {fieldName, nickname}[] – struct field names to show per element
 
+        this.pointers = []; // (name, val)
         // Content area: connected boxes
         this.arrayBoxContainer = document.createElement('div');
         this.arrayBoxContainer.className = 'viz-array-container';
@@ -90,6 +92,26 @@ class ArrayVisualizer extends BaseVisualizer {
         ilGroup.appendChild(this._indexLabelBtn);
         toolbar.appendChild(ilGroup);
 
+        const ptrSection = document.createElement('div');
+        ptrSection.className = 'viz-ll-section';
+        const ptrSectionLabel = document.createElement('div');
+        ptrSectionLabel.className = 'viz-ll-section-title';
+        ptrSectionLabel.textContent = 'Pointers:';
+        ptrSection.appendChild(ptrSectionLabel);
+        this._pointersContainer = document.createElement('div');
+        this._pointersContainer.className = 'viz-ll-rows';
+        ptrSection.appendChild(this._pointersContainer);
+        const addPtrBtn = document.createElement('button');
+        addPtrBtn.className = 'viz-ll-add-btn';
+        addPtrBtn.textContent = '+ Add pointer';
+        addPtrBtn.addEventListener('mousedown', e => e.stopPropagation());
+        addPtrBtn.addEventListener('click', () => {
+            this.pointers.push({ name: '', value: null });
+            this._syncPointersUI();
+        });
+        ptrSection.appendChild(addPtrBtn);
+        toolbar.appendChild(ptrSection);
+
         return toolbar;
     }
 
@@ -97,6 +119,43 @@ class ArrayVisualizer extends BaseVisualizer {
         if (!this._indexLabelBtn) return;
         this._indexLabelBtn.textContent = this.indexLabel === 'index' ? 'Index' : 'Name';
         this._indexLabelBtn.classList.toggle('viz-toggle--active', this.indexLabel === 'name');
+    }
+    _syncPointersUI() {
+        if (!this._pointersContainer) return;
+        this._pointersContainer.innerHTML = '';
+        this.pointers.forEach((ptr, idx) => {
+            const row = this._mkPointerRow(ptr, idx);
+            this._pointersContainer.appendChild(row);
+        });
+    }
+    _mkPointerRow(ptr, idx) {
+        const row = document.createElement('div');
+        row.className = 'viz-ll-row';
+
+        const pointInput = document.createElement('input');
+        pointInput.type = 'text';
+        pointInput.className = 'viz-ll-input';
+        pointInput.placeholder = 'pointer name';
+        pointInput.value = ptr.name;
+        pointInput.addEventListener('mousedown', e => e.stopPropagation());
+        pointInput.addEventListener('change', e => {
+            this.pointers[idx].name = e.target.value.trim();
+            this._render();
+        });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'viz-ll-remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('mousedown', e => e.stopPropagation());
+        removeBtn.addEventListener('click', () => {
+            this.pointers.splice(idx, 1);
+            this._syncPointersUI();
+            this._render();
+        });
+
+        row.appendChild(pointInput);
+        row.appendChild(removeBtn);
+        return row;
     }
 
     _createControl(toolbar, labelText, initialValue, onChange) {
@@ -122,15 +181,18 @@ class ArrayVisualizer extends BaseVisualizer {
         return input;
     }
 
-    update(variable) {
+    update(variable, allVariable) {
         // Snapshot previous values keyed by index before overwriting
         this._prevValues = new Map();
         if (this.variable && this.variable.children) {
             this.variable.children.forEach((c, i) => this._prevValues.set(i, c.value));
         }
+        this.allVariable = allVariable;
         this.variable = variable;
         this._syncAdvancedUI();
+        
         this._render();
+        
     }
 
     // ── Advanced settings (data fields) ────────────────────────────────────
@@ -346,14 +408,27 @@ class ArrayVisualizer extends BaseVisualizer {
             this.arrayBoxContainer.appendChild(msg);
             return;
         }
+        if (this.allVariable && this.pointers.length > 0) {
+            this.pointers.forEach(ptr => {
+                const v = this.allVariable.get(ptr.name);
+                ptr.value = null;
+                if (v) {
+                    const idx = parseInt(v.value);
+                    if (!isNaN(idx)) {
+                        ptr.value = idx;
+                    }
+                }
+                console.log(ptr);
+            });
+        }
 
         const children = this.variable.children;
         const { start, end } = this._rangeBounds(children.length);
         if (end < start) return;
 
+        
         for (let i = start; i <= end; i++) {
             const child = children[i];
-
             const box = document.createElement('div');
             const changed = this._prevValues.size > 0 && this._prevValues.get(i) !== child.value;
             box.className = 'viz-array-box' + (changed ? ' viz-array-box--changed' : '');
@@ -365,10 +440,14 @@ class ArrayVisualizer extends BaseVisualizer {
             if (this._dynBoxH) {
                 box.style.height = this._dynBoxH;
             }
+            const matchedPointers = this.pointers.filter(p => p.value === i);
+            
 
             const indexEl = document.createElement('div');
             indexEl.className = 'viz-array-index';
             indexEl.textContent = this.indexLabel === 'name' ? this._leafName(child.name) : i;
+            indexEl.className = 'viz-array-index' + (matchedPointers.length > 0 ? ' viz-array-index--pointer' : '');
+            indexEl.textContent = matchedPointers.length > 0 ? matchedPointers.map(p => p.name).join(',') : i;
 
             // Data fields: show struct fields
             const activeFields = this.dataFields.filter(f => f.fieldName);
@@ -425,6 +504,34 @@ class ArrayVisualizer extends BaseVisualizer {
             this.arrayBoxContainer.appendChild(box);
             this._elements.push({ index: i, domRef: box, text: child.value });
         }
+
+        //TEST
+        // const box = document.createElement('div');
+        // box.className = 'viz-array-box';
+        // // Apply dynamic width determined by onContainerResize
+        // if (this._dynBoxW) {
+        //     box.style.width = this._dynBoxW;
+        //     box.style.flex = `0 0 ${this._dynBoxW}`;
+        // }
+        // if (this._dynBoxH) {
+        //     box.style.height = this._dynBoxH;
+        // }
+        // this.pointers.forEach(ptr => {
+        //     const indexEl = document.createElement('div');
+        //     indexEl.className = 'viz-array-index';
+        //     indexEl.textContent = ptr.name;
+
+        //     const valueEl = document.createElement('div');
+        //     valueEl.className = 'viz-array-value';
+            
+
+        //     box.appendChild(indexEl);
+        //     box.appendChild(valueEl);
+        //     this.arrayBoxContainer.appendChild(box);
+        // });
+        // console.log(this.allVariable);
+        // this.arrayBoxContainer.appendChild(box);
+        //TEST
     }
 }
 
