@@ -480,6 +480,27 @@ body {
     color: #fff;
 }
 
+/* Matrix 版本的指標標籤 */
+.viz-matrix-index--pointer {
+    color: #ffd700 !important; /* 亮眼金色 */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); /* 增加發光感 */
+    transform: scale(1.1);
+    z-index: 1; /* 確保縮放時不會被鄰近格子壓住 */
+    background-color: #2c2c2c !important; /* 深色背景讓金色更跳 */
+}
+
+/* 當標籤為指標時，下方的數值變為白色 */
+.viz-matrix-index--pointer + .viz-matrix-val {
+    color: #fff !important;
+}
+
+
+.viz-matrix-cell--active-pointer {
+    background-color: #333;
+    border-color: #ffd700;
+}
+
 
 
 /* --------------------- */
@@ -516,7 +537,7 @@ body {
     background-color: var(--bg-color);
 }
 
-.viz-matrix-coord {
+.viz-matrix-index {
     background-color: var(--sidebar-bg);
     border-bottom: 1px solid var(--border-color);
     font-size: 0.7em;

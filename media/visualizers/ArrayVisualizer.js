@@ -233,7 +233,7 @@ class ArrayVisualizer extends BaseVisualizer {
         const { start, end } = this._rangeBounds(children.length);
         if (end < start) return;
 
-        
+        const fragment = document.createDocumentFragment();
         for (let i = start; i <= end; i++) {
             const child = children[i];
             const box = document.createElement('div');
@@ -261,8 +261,9 @@ class ArrayVisualizer extends BaseVisualizer {
 
             box.appendChild(indexEl);
             box.appendChild(valueEl);
-            this.arrayBoxContainer.appendChild(box);
+            fragment.appendChild(box);
         }
+        this.arrayBoxContainer.appendChild(fragment);
     }
 }
 
