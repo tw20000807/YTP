@@ -171,7 +171,7 @@ class BarVisualizer extends BaseVisualizer {
             barUnit.className = 'viz-bar-unit';
 
             const valLabel = document.createElement('div');
-            valLabel.className = 'viz-bar-value';
+            valLabel.className = 'viz-bar-value ' + (isChanged ? ' viz-bar-value--changed' : '');;
             valLabel.textContent = child.value;
 
             const barWrapper = document.createElement('div');
@@ -210,12 +210,12 @@ class BarVisualizer extends BaseVisualizer {
 
     _createControl(toolbar, labelText, initialValue, onChange) {
         const group = document.createElement('div');
-        group.className = 'viz-array-control';
+        group.className = 'viz-bar-control';
         const span = document.createElement('span');
         span.textContent = labelText + ': ';
         const input = document.createElement('input');
         input.type = 'number';
-        input.className = 'viz-array-input';
+        input.className = 'viz-bar-input';
         input.placeholder = labelText === 'Limit' ? 'all' : '0';
         input.addEventListener('mousedown', e => e.stopPropagation());
         input.addEventListener('change', e => onChange(e.target.value));

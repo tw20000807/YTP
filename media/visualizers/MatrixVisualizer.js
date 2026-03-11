@@ -276,7 +276,7 @@ class MatrixVisualizer extends BaseVisualizer {
                 const cell = document.createElement('div');
                 const changed = this._prevValues.has(cellKey) && this._prevValues.get(cellKey) !== cellData.value;
                 
-                cell.className = `viz-matrix-cell ${changed ? 'viz-matrix-cell--changed' : ''}`;
+                cell.className = 'viz-matrix-cell';
 
                 if (this._dynCellW) {
                     const w = `${this._dynCellW}px`;
@@ -292,7 +292,7 @@ class MatrixVisualizer extends BaseVisualizer {
                 indexEl.textContent = (matchedPointers.length > 0) ? matchedPointers.map(p => `(${p.rname},${p.cname})`).join(',') : `(${r},${c})`;
 
                 const valueEl = document.createElement('div');
-                valueEl.className = 'viz-matrix-val';
+                valueEl.className = 'viz-matrix-val' + (changed ? ' viz-matrix-val--changed' : '');
                 valueEl.textContent = cellData.value ?? '';
                 
                 if (cellData.type) cell.title = `Type: ${cellData.type}`;

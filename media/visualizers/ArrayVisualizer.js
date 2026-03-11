@@ -238,7 +238,7 @@ class ArrayVisualizer extends BaseVisualizer {
             const child = children[i];
             const box = document.createElement('div');
             const changed = this._prevValues.size > 0 && this._prevValues.get(i) !== child.value;
-            box.className = 'viz-array-box' + (changed ? ' viz-array-box--changed' : '');
+            box.className = 'viz-array-box ';
             // Apply dynamic width determined by onContainerResize
             if (this._dynBoxW) {
                 box.style.width = this._dynBoxW;
@@ -255,7 +255,7 @@ class ArrayVisualizer extends BaseVisualizer {
             indexEl.textContent = matchedPointers.length > 0 ? matchedPointers.map(p => p.name).join(',') : i;
 
             const valueEl = document.createElement('div');
-            valueEl.className = 'viz-array-value';
+            valueEl.className = 'viz-array-value' + (changed ? ' viz-array-value--changed' : '');
             valueEl.textContent = child.value;
             if (child.type) valueEl.title = child.type;
 
