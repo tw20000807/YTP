@@ -104,25 +104,6 @@ class HeapVisualizer extends GraphBaseVisualizer {
         limitGroup.appendChild(this._limitInput);
         toolbar.appendChild(limitGroup);
 
-        // Index label toggle
-        const ilGroup = document.createElement('div');
-        ilGroup.className = 'viz-control';
-        const ilSpan = document.createElement('span');
-        ilSpan.className = 'viz-ctrl-label';
-        ilSpan.textContent = 'Label: ';
-        this._indexLabelBtn = document.createElement('button');
-        this._indexLabelBtn.className = 'viz-toggle';
-        this._indexLabelBtn.addEventListener('mousedown', e => e.stopPropagation());
-        this._indexLabelBtn.addEventListener('click', () => {
-            this.indexLabel = this.indexLabel === 'index' ? 'name' : 'index';
-            this._syncIndexLabelBtn();
-            this._refresh();
-        });
-        this._syncIndexLabelBtn();
-        ilGroup.appendChild(ilSpan);
-        ilGroup.appendChild(this._indexLabelBtn);
-        toolbar.appendChild(ilGroup);
-
         return toolbar;
     }
 
@@ -166,35 +147,13 @@ class HeapVisualizer extends GraphBaseVisualizer {
         });
         wrap.appendChild(addBtn);
 
-        // Name field
-        const nameSection = document.createElement('div');
-        nameSection.className = 'viz-ll-section';
-        const nameLabel = document.createElement('div');
-        nameLabel.className = 'viz-ll-section-title';
-        nameLabel.textContent = 'Name field:';
-        nameSection.appendChild(nameLabel);
-        const nameRow = document.createElement('div');
-        nameRow.className = 'viz-ll-row';
-        this._nameFieldInput = document.createElement('input');
-        this._nameFieldInput.type = 'text';
-        this._nameFieldInput.className = 'viz-ll-input';
-        this._nameFieldInput.placeholder = '(auto)';
-        this._nameFieldInput.value = this.nameField;
-        this._nameFieldInput.addEventListener('mousedown', e => e.stopPropagation());
-        this._nameFieldInput.addEventListener('change', e => {
-            this.nameField = e.target.value.trim();
-            this._refresh();
-        });
-        nameRow.appendChild(this._nameFieldInput);
-        nameSection.appendChild(nameRow);
-        wrap.appendChild(nameSection);
-
         this._syncAdvancedUI();
         return wrap;
     }
 
     _syncAdvancedUI() {
         if (!this._advFieldsContainer) return;
+        if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(this._advFieldsContainer);
         this._advFieldsContainer.innerHTML = '';
         this.dataFields.forEach((df, idx) => {
             const row = document.createElement('div');
@@ -361,24 +320,78 @@ class HeapVisualizer extends GraphBaseVisualizer {
 
     _applyLayout() {
         if (this._nodes.length === 0) return;
-        const nodeKeys = this._nodes.map(n => n.id);
-        const root = this.base === 1 ? 1 : 0;
-        const byLayer = this._computeLayersBFS(nodeKeys, this._edges, root);
         const nodeById = new Map(this._nodes.map(n => [n.id, n]));
-        const nLayers = byLayer.size;
-        const maxPerLayer = Math.max(...[...byLayer.values()].map(a => a.length), 1);
+        const root = this.base === 1 ? 1 : 0;
 
-        const w = Math.max((maxPerLayer + 1) * 80, 280);
-        const h = Math.max((nLayers + 1) * 65, 220);
+        // Compute depth of tree
+        const n = this._nodes.length;
+        const lastId = this._nodes[n - 1].id;
+        let maxDepth = 0;
+        {
+            let id = lastId;
+            while (id > root) {
+                id = this.base === 0 ? Math.floor((id - 1) / 2) : Math.floor(id / 2);
+                maxDepth++;
+            }
+        }
 
-        const lSpacing = h / (nLayers + 1);
-        byLayer.forEach((ids, l) => {
-            const nSpacing = w / (ids.length + 1);
-            ids.forEach((id, i) => {
-                const nd = nodeById.get(id);
-                if (nd) { nd.x = (i + 1) * nSpacing; nd.y = (l + 1) * lSpacing; }
-            });
-        });
+        const hSpacing = 55;  // horizontal distance between nodes at the deepest level
+        const vSpacing = 65;  // vertical distance between layers
+
+        // Position nodes top-down: root at center, children offset from parent
+        // At depth d, the horizontal offset from parent is hSpacing * 2^(maxDepth - d - 1)
+        const depthOf = (id) => {
+            let d = 0, cur = id;
+            while (cur > root) {
+                cur = this.base === 0 ? Math.floor((cur - 1) / 2) : Math.floor(cur / 2);
+                d++;
+            }
+            return d;
+        };
+
+        const w = Math.max((Math.pow(2, maxDepth) + 1) * hSpacing, 280);
+        const h = Math.max((maxDepth + 2) * vSpacing, 220);
+
+        // Place root
+        const rootNode = nodeById.get(root);
+        if (rootNode) {
+            rootNode.x = w / 2;
+            rootNode.y = vSpacing;
+        }
+
+        // BFS to place children relative to parent
+        const queue = [root];
+        let qi = 0;
+        while (qi < queue.length) {
+            const pid = queue[qi++];
+            const parent = nodeById.get(pid);
+            if (!parent) continue;
+            const pDepth = depthOf(pid);
+
+            let leftId, rightId;
+            if (this.base === 0) {
+                leftId  = 2 * pid + 1;
+                rightId = 2 * pid + 2;
+            } else {
+                leftId  = 2 * pid;
+                rightId = 2 * pid + 1;
+            }
+
+            const offset = hSpacing * Math.pow(2, maxDepth - pDepth - 1);
+
+            const leftNode = nodeById.get(leftId);
+            if (leftNode) {
+                leftNode.x = parent.x - offset;
+                leftNode.y = parent.y + vSpacing;
+                queue.push(leftId);
+            }
+            const rightNode = nodeById.get(rightId);
+            if (rightNode) {
+                rightNode.x = parent.x + offset;
+                rightNode.y = parent.y + vSpacing;
+                queue.push(rightId);
+            }
+        }
 
         this._heapW = w;
         this._heapH = h;
@@ -452,18 +465,18 @@ class HeapVisualizer extends GraphBaseVisualizer {
             const circle = document.createElementNS(NS, 'circle');
             circle.setAttribute('r', NODE_R);
 
-            // Node label
+            // Node label: show VALUE as primary, index as secondary
             let label;
             if (this.nameField && child) {
                 const v = this._resolveFieldValue(child, this.nameField);
-                label = v !== undefined ? String(v) : String(nd.id);
-            } else if (this.indexLabel === 'name' && child) {
-                label = this._leafName(child.name);
+                label = v !== undefined ? String(v) : (child ? child.value : String(nd.id));
+            } else if (child) {
+                label = child.value;
             } else {
                 label = String(nd.id);
             }
 
-            // Value text
+            // Value text (data fields override)
             let valueText = '';
             if (activeFields.length > 0 && child && child.children) {
                 const parts = [];
@@ -477,15 +490,15 @@ class HeapVisualizer extends GraphBaseVisualizer {
                     }
                 }
                 valueText = parts.join(', ');
-            } else if (child) {
-                valueText = child.value;
             }
 
             // Render label + value
             const text = document.createElementNS(NS, 'text');
             text.setAttribute('text-anchor', 'middle');
+            // Display: if data fields override, show label above + fields below;
+            // otherwise just show the value (label) centered
+            const displayText = valueText || label;
             if (valueText && valueText !== label) {
-                // Show label above, value below
                 text.setAttribute('dominant-baseline', 'auto');
                 text.setAttribute('y', '-4');
                 text.textContent = label;
@@ -499,7 +512,7 @@ class HeapVisualizer extends GraphBaseVisualizer {
                 g.appendChild(valText);
             } else {
                 text.setAttribute('dominant-baseline', 'central');
-                text.textContent = valueText || label;
+                text.textContent = displayText;
             }
 
             g.appendChild(circle);
@@ -508,7 +521,7 @@ class HeapVisualizer extends GraphBaseVisualizer {
 
             this._nodeMap.set(nd.id, { node: nd, g });
             this._elements.push({
-                index: ni, domRef: g, text: valueText || label,
+                index: ni, domRef: g, text: displayText,
                 rect: { x: nd.x - NODE_R, y: nd.y - NODE_R, w: NODE_R * 2, h: NODE_R * 2 }
             });
         }

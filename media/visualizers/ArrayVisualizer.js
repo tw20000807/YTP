@@ -267,6 +267,7 @@ class ArrayVisualizer extends BaseVisualizer {
 
     _syncAdvancedUI() {
         if (!this._advFieldsContainer) return;
+        if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(this._advFieldsContainer);
         this._advFieldsContainer.innerHTML = '';
         this.dataFields.forEach((df, idx) => {
             const row = document.createElement('div');
@@ -437,10 +438,19 @@ class ArrayVisualizer extends BaseVisualizer {
             
 
             const indexEl = document.createElement('div');
-            indexEl.className = 'viz-array-index';
-            indexEl.textContent = this.indexLabel === 'name' ? this._leafName(child.name) : i;
-            indexEl.className = 'viz-array-index' + (matchedPointers.length > 0 ? ' viz-array-index--pointer' : '');
-            indexEl.textContent = matchedPointers.length > 0 ? matchedPointers.map(p => p.name).join(',') : i;
+            if (matchedPointers.length > 0) {
+                indexEl.className = 'viz-array-index viz-array-index--pointer';
+                indexEl.textContent = matchedPointers.map(p => p.name).join(',');
+            } else if (this.indexLabel === 'name') {
+                indexEl.className = 'viz-array-index';
+                // Show the child's own name (e.g. [0], [1]) not the parent array name
+                const childName = child.name || '';
+                const bracketMatch = childName.match(/(\[\d+\])/);
+                indexEl.textContent = bracketMatch ? bracketMatch[1] : `[${i}]`;
+            } else {
+                indexEl.className = 'viz-array-index';
+                indexEl.textContent = i;
+            }
 
             // Data fields: show struct fields
             const activeFields = this.dataFields.filter(f => f.fieldName);

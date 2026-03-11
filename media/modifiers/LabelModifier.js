@@ -7,6 +7,8 @@ console.log('[YTP] LabelModifier.js loaded');
  * For a scalar variable: the value is appended to all elements.
  */
 class LabelModifier extends BaseModifier {
+    static acceptsType = 'array';
+
     constructor(settings = {}) {
         super({
             position: 'bottom', // 'top' | 'bottom' | 'right'
@@ -118,7 +120,7 @@ class LabelModifier extends BaseModifier {
         }
     }
 
-    clear() {
+    clear(elements) {
         for (const lbl of this._createdLabels) {
             lbl.remove();
         }

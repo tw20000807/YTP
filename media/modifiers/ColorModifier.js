@@ -7,10 +7,12 @@ console.log('[YTP] ColorModifier.js loaded');
  * Supports numeric values mapped to a palette, or string hex colors.
  */
 class ColorModifier extends BaseModifier {
+    static acceptsType = 'array';
+
     constructor(settings = {}) {
         super({
             palette: 'heat',    // 'heat' | 'cool' | 'rainbow' | 'custom'
-            opacity: 0.35,
+            opacity: 0.80,
             ...settings
         });
         this._appliedElements = [];
@@ -42,13 +44,25 @@ class ColorModifier extends BaseModifier {
             if (dom instanceof SVGElement) {
                 // Target the first fillable shape child, not the <g> group
                 const shape = dom.querySelector('rect, circle, path, ellipse') || dom;
-                shape.setAttribute('fill', color);
-                shape.setAttribute('fill-opacity', String(opacity));
+                shape.style.fill = color;
+                shape.style.fillOpacity = String(opacity);
                 this._appliedElements.push({ domRef: shape, isSvg: true });
             } else {
-                dom.style.backgroundColor = color;
-                dom.style.setProperty('--modifier-bg-opacity', String(opacity));
-                this._appliedElements.push({ domRef: dom, isSvg: false });
+                // Array boxes: highlight both index and value cells
+                const indexEl = dom.querySelector('.viz-array-index');
+                const valueEl = dom.querySelector('.viz-array-value');
+                if (indexEl && valueEl) {
+                    indexEl.style.backgroundColor = color;
+                    indexEl.style.opacity = String(opacity);
+                    valueEl.style.backgroundColor = color;
+                    valueEl.style.opacity = String(opacity);
+                    this._appliedElements.push({ domRef: indexEl, isSvg: false });
+                    this._appliedElements.push({ domRef: valueEl, isSvg: false });
+                } else {
+                    dom.style.backgroundColor = color;
+                    dom.style.setProperty('--modifier-bg-opacity', String(opacity));
+                    this._appliedElements.push({ domRef: dom, isSvg: false });
+                }
             }
         }
     }
@@ -57,10 +71,11 @@ class ColorModifier extends BaseModifier {
         for (const applied of this._appliedElements) {
             if (!applied.domRef) continue;
             if (applied.isSvg) {
-                applied.domRef.removeAttribute('fill');
-                applied.domRef.removeAttribute('fill-opacity');
+                applied.domRef.style.fill = '';
+                applied.domRef.style.fillOpacity = '';
             } else {
                 applied.domRef.style.backgroundColor = '';
+                applied.domRef.style.opacity = '';
                 applied.domRef.style.removeProperty('--modifier-bg-opacity');
             }
         }

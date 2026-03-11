@@ -69,7 +69,7 @@ class VisualizerManager {
             const variable = varMap.get(path);
             if (variable) {
                 entry.variableData = variable;
-                entry.visualizer.update(variable);
+                entry.visualizer.update(variable, varMap);
                 // Apply modifiers after render
                 this._applyModifiers(entry, varMap);
             }
@@ -363,6 +363,9 @@ class VisualizerManager {
                          entry2.contentElement.clientWidth,
                          entry2.contentElement.clientHeight
                      );
+                     // Re-apply modifiers after resize since DOM elements may have been recreated
+                     const vm = window.controller ? window.controller.varMap : new Map();
+                     this._applyModifiers(entry2, vm);
                  }
                  // Reposition popup if it's open for this block
                  if (this.activePopupPath === path && entry2) {
@@ -493,15 +496,8 @@ class VisualizerManager {
         const best = scored[0];
 
         popup.style.left = `${best.left}px`;
-        if (best.anchorBottom) {
-            // Anchor from bottom: the bottom edge of the popup stays fixed
-            // at blockTop - GAP so the popup grows upward when its size changes.
-            popup.style.top  = '';
-            popup.style.bottom = `${Math.max(0, dashH - blockTop + GAP)}px`;
-        } else {
-            popup.style.bottom = '';
-            popup.style.top    = `${best.top}px`;
-        }
+        popup.style.bottom = '';
+        popup.style.top    = `${best.top}px`;
         popup.style.visibility = '';
     }
 
@@ -1021,7 +1017,9 @@ class VisualizerManager {
 
             const tag = document.createElement('span');
             tag.className = 'modifier-tag';
-            tag.textContent = `[${mDef.type}]`;
+            const ModCls = typeof modifierRegistry !== 'undefined' ? modifierRegistry.get(mDef.type) : null;
+            const accepts = ModCls && ModCls.acceptsType ? `(${ModCls.acceptsType})` : '';
+            tag.textContent = `[${mDef.type}${accepts}]`;
 
             const varName = document.createElement('span');
             varName.className = 'modifier-var';
@@ -1098,49 +1096,87 @@ class VisualizerManager {
     _showAddModifierPicker(path, modSection, addBtn) {
         // Remove existing picker if any
         const existing = modSection.querySelector('.modifier-picker');
-        if (existing) { existing.remove(); return; }
+        if (existing) {
+            if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(existing);
+            existing.remove();
+            return;
+        }
 
         const picker = document.createElement('div');
         picker.className = 'modifier-picker';
         picker.onmousedown = (e) => e.stopPropagation();
 
-        // Modifier type selector
+        // ── Modifier type: native <select> (reliable in webview) ──
         const typeGroup = document.createElement('div');
         typeGroup.className = 'viz-control';
         const typeLabel = document.createElement('span');
         typeLabel.className = 'viz-ctrl-label';
         typeLabel.textContent = 'Type: ';
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'viz-select';
-        if (typeof modifierRegistry !== 'undefined') {
-            modifierRegistry.getAllTypes().forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t; opt.textContent = t;
-                typeSelect.appendChild(opt);
-            });
-        }
+        const typeInput = document.createElement('select');
+        typeInput.className = 'viz-select';
+        typeInput.addEventListener('mousedown', e => e.stopPropagation());
+        const allTypes = (typeof modifierRegistry !== 'undefined')
+            ? modifierRegistry.getAllTypes().sort()
+            : [];
+        allTypes.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            const ModCls = modifierRegistry.get(t);
+            const accepts = ModCls && ModCls.acceptsType ? `(${ModCls.acceptsType})` : '';
+            opt.textContent = `${t}${accepts}`;
+            typeInput.appendChild(opt);
+        });
         typeGroup.appendChild(typeLabel);
-        typeGroup.appendChild(typeSelect);
+        typeGroup.appendChild(typeInput);
         picker.appendChild(typeGroup);
 
-        // Variable selector — populated from the current varMap
+        // ── Variable: text input with CustomDropdown ──
+        // Show children of the block's variable first, then all other variables
         const varGroup = document.createElement('div');
         varGroup.className = 'viz-control';
         const varLabel = document.createElement('span');
         varLabel.className = 'viz-ctrl-label';
         varLabel.textContent = 'Var: ';
-        const varSelect = document.createElement('select');
-        varSelect.className = 'viz-select';
-        // Gather available variable paths from controller
-        if (window.controller && window.controller.varMap) {
-            window.controller.varMap.forEach((v, vPath) => {
-                const opt = document.createElement('option');
-                opt.value = vPath; opt.textContent = v.name || vPath;
-                varSelect.appendChild(opt);
+        const varInput = document.createElement('input');
+        varInput.type = 'text';
+        varInput.className = 'viz-input';
+        varInput.placeholder = 'variable';
+        varInput.addEventListener('mousedown', e => e.stopPropagation());
+
+        const getVarOptions = () => {
+            if (!window.controller || !window.controller.varMap) return [];
+
+            const varMap = window.controller.varMap;
+            const filter = varInput.value.trim();
+            const allPaths = Array.from(varMap.keys()).sort((a, b) =>
+                a.localeCompare(b, undefined, { sensitivity: 'base' })
+            );
+
+            // First open (no text): only show this block's direct children.
+            if (!filter) {
+                const childPaths = [];
+                const blockVar = varMap.get(path);
+                if (blockVar && Array.isArray(blockVar.children)) {
+                    blockVar.children.forEach(child => {
+                        const childPath = `${path}.${child.name}`;
+                        if (varMap.has(childPath)) childPaths.push(childPath);
+                    });
+                }
+                return childPaths.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            }
+
+            // When typing: search over all variables (prefix filter is handled by CustomDropdown).
+            return allPaths;
+        };
+        if (typeof CustomDropdown !== 'undefined') {
+            CustomDropdown.attach(varInput, getVarOptions, {
+                matchMode: 'prefix',
+                sort: true,
+                resetScrollOnShow: true
             });
         }
         varGroup.appendChild(varLabel);
-        varGroup.appendChild(varSelect);
+        varGroup.appendChild(varInput);
         picker.appendChild(varGroup);
 
         // Confirm button
@@ -1149,15 +1185,25 @@ class VisualizerManager {
         okBtn.textContent = 'Add';
         okBtn.onclick = (e) => {
             e.stopPropagation();
-            const modType = typeSelect.value;
-            const varPath = varSelect.value;
+            let modType = typeInput.value;
+            let varPath = varInput.value.trim();
+
+            if (window.controller && window.controller.varMap) {
+                const paths = Array.from(window.controller.varMap.keys());
+                const pathLo = varPath.toLowerCase();
+                varPath = paths.find(p => p === varPath)
+                    || paths.find(p => p.toLowerCase() === pathLo)
+                    || paths.find(p => p.toLowerCase().startsWith(pathLo))
+                    || varPath;
+            }
+
             if (modType && varPath) {
                 this.addModifier(path, modType, varPath);
                 const kb2 = this.knownBlocks.get(path);
                 const newIdx = kb2 && kb2.modifiers ? kb2.modifiers.length - 1 : -1;
+                if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(picker);
                 this._refreshModifierUI(path, newIdx);
             }
-            picker.remove();
         };
         picker.appendChild(okBtn);
 

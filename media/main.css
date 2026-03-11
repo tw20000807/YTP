@@ -466,11 +466,51 @@ body {
     border-radius: 3px;
     background: #252526;
 }
+/* Override display:contents inside modifier-picker so label+input stay inline */
+.modifier-picker .viz-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.modifier-picker .viz-input {
+    flex: 1;
+    min-width: 80px;
+}
+.modifier-picker .viz-input,
+.modifier-picker .viz-select,
+.modifier-settings-panel .viz-input,
+.modifier-settings-panel .viz-select {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+.modifier-picker .block-btn,
+.modifier-settings-panel .block-btn {
+    background-color: #1e1e1e;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 2px 8px;
+    border-radius: 2px;
+}
+.modifier-picker .block-btn:hover,
+.modifier-settings-panel .block-btn:hover {
+    background-color: #2a2a2a;
+    color: #fff;
+}
 .modifier-settings-panel {
     padding: 4px 8px 4px 20px;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    overflow: visible;
+    min-height: 0;
+}
+/* Ensure modifier-settings panel inputs/selects are styled in webview */
+.modifier-settings-panel .viz-select,
+.modifier-settings-panel .viz-toggle {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
 }
 /* Pointer arrow indicator */
 .viz-pointer-arrow {
@@ -494,6 +534,33 @@ body {
     font-size: 0.85em;
     color: var(--text-color);
     gap: 4px;
+}
+
+.viz-select {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 4px;
+    font-size: 0.85em;
+    outline: none;
+}
+
+.viz-toggle {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1px 6px;
+    font-size: 0.85em;
+    cursor: pointer;
+    outline: none;
+}
+.viz-toggle:hover {
+    background-color: #3a3a4a;
+}
+.viz-toggle--active {
+    background-color: #094771;
+    border-color: var(--highlight-color);
+    color: #fff;
 }
 
 .viz-input {
@@ -880,6 +947,32 @@ body {
     flex-shrink: 0;
 }
 .viz-ll-remove-btn:hover { color: #e07070; }
+
+/* ── Custom Dropdown (autocomplete) ──────────────────────────── */
+
+.ytp-custom-dropdown {
+    position: absolute;
+    z-index: 10000;
+    background: var(--block-bg, #2d2d3d);
+    border: 1px solid var(--border-color, #555);
+    border-radius: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    font-family: Consolas, monospace;
+    font-size: 12px;
+}
+.ytp-custom-dropdown-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--text-color, #ccc);
+    white-space: nowrap;
+}
+.ytp-custom-dropdown-item:hover,
+.ytp-custom-dropdown-item.ytp-dropdown-active {
+    background: var(--highlight-color, #094771);
+    color: #fff;
+}
 
 
 /* ---------------------- bar */

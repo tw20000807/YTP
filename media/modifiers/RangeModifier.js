@@ -7,10 +7,11 @@ console.log('[YTP] RangeModifier.js loaded');
  * or a single variable whose children[0] and children[1] are the bounds.
  */
 class RangeModifier extends BaseModifier {
+    static acceptsType = 'pair';
+
     constructor(settings = {}) {
         super({
             color: '#4fc3f7',
-            style: 'background',  // 'background' | 'border'
             opacity: 0.25,
             ...settings
         });
@@ -26,8 +27,6 @@ class RangeModifier extends BaseModifier {
 
         const color = this.settings.color || '#4fc3f7';
         const opacity = this.settings.opacity || 0.25;
-        const style = this.settings.style || 'background';
-
         for (const el of elements) {
             if (el.index < lo || el.index > hi) continue;
             if (!el.domRef) continue;
@@ -35,26 +34,27 @@ class RangeModifier extends BaseModifier {
             if (el.domRef instanceof SVGElement) {
                 // Target the first fillable shape child, not the <g> group
                 const shape = el.domRef.querySelector('rect, circle, path, ellipse') || el.domRef;
-                if (style === 'border') {
-                    shape.setAttribute('data-mod-orig-stroke', shape.getAttribute('stroke') || '');
-                    shape.setAttribute('data-mod-orig-stroke-width', shape.getAttribute('stroke-width') || '');
-                    shape.setAttribute('stroke', color);
-                    shape.setAttribute('stroke-width', '2');
-                    this._appliedElements.push({ domRef: shape, style: 'border', isSvg: true });
-                } else {
-                    shape.setAttribute('fill', color);
-                    shape.setAttribute('fill-opacity', String(opacity));
-                    this._appliedElements.push({ domRef: shape, style, isSvg: true });
-                }
-            } else if (style === 'border') {
-                el.domRef.style.outline = `2px solid ${color}`;
-                el.domRef.style.outlineOffset = '-1px';
-                this._appliedElements.push({ domRef: el.domRef, style, isSvg: false });
+                shape.style.fill = color;
+                shape.style.fillOpacity = String(opacity);
+                this._appliedElements.push({ domRef: shape, style: 'highlight', isSvg: true });
             } else {
-                el.domRef.style.backgroundColor = color;
-                el.domRef.style.opacity = '';
-                el.domRef.style.boxShadow = `inset 0 0 0 1000px rgba(${this._hexToRgb(color)}, ${opacity})`;
-                this._appliedElements.push({ domRef: el.domRef, style, isSvg: false });
+                // Array boxes: highlight both index and value cells
+                const indexEl = el.domRef.querySelector('.viz-array-index');
+                const valueEl = el.domRef.querySelector('.viz-array-value');
+                if (indexEl && valueEl) {
+                    const bg = `rgba(${this._hexToRgb(color)}, ${opacity})`;
+                    indexEl.style.backgroundColor = bg;
+                    indexEl.style.boxShadow = `inset 0 0 0 1px ${color}`;
+                    valueEl.style.backgroundColor = bg;
+                    valueEl.style.boxShadow = `inset 0 0 0 1px ${color}`;
+                    this._appliedElements.push({ domRef: indexEl, style: 'highlight', isSvg: false });
+                    this._appliedElements.push({ domRef: valueEl, style: 'highlight', isSvg: false });
+                } else {
+                    el.domRef.style.backgroundColor = color;
+                    el.domRef.style.opacity = '';
+                    el.domRef.style.boxShadow = `inset 0 0 0 1000px rgba(${this._hexToRgb(color)}, ${opacity})`;
+                    this._appliedElements.push({ domRef: el.domRef, style: 'highlight', isSvg: false });
+                }
             }
         }
     }
@@ -63,18 +63,8 @@ class RangeModifier extends BaseModifier {
         for (const applied of this._appliedElements) {
             if (!applied.domRef) continue;
             if (applied.isSvg) {
-                if (applied.style === 'border') {
-                    applied.domRef.setAttribute('stroke', applied.domRef.getAttribute('data-mod-orig-stroke') || '');
-                    applied.domRef.setAttribute('stroke-width', applied.domRef.getAttribute('data-mod-orig-stroke-width') || '');
-                    applied.domRef.removeAttribute('data-mod-orig-stroke');
-                    applied.domRef.removeAttribute('data-mod-orig-stroke-width');
-                } else {
-                    applied.domRef.removeAttribute('fill');
-                    applied.domRef.removeAttribute('fill-opacity');
-                }
-            } else if (applied.style === 'border') {
-                applied.domRef.style.outline = '';
-                applied.domRef.style.outlineOffset = '';
+                applied.domRef.style.fill = '';
+                applied.domRef.style.fillOpacity = '';
             } else {
                 applied.domRef.style.backgroundColor = '';
                 applied.domRef.style.boxShadow = '';
@@ -110,29 +100,6 @@ class RangeModifier extends BaseModifier {
     getSettingsUI(onChange) {
         const container = document.createElement('div');
         container.className = 'modifier-settings';
-
-        // Style selector
-        const styleGroup = document.createElement('div');
-        styleGroup.className = 'viz-control';
-        const styleLabel = document.createElement('span');
-        styleLabel.className = 'viz-ctrl-label';
-        styleLabel.textContent = 'Style: ';
-        const styleSelect = document.createElement('select');
-        styleSelect.className = 'viz-select';
-        ['background', 'border'].forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s; opt.textContent = s;
-            if (s === this.settings.style) opt.selected = true;
-            styleSelect.appendChild(opt);
-        });
-        styleSelect.addEventListener('mousedown', e => e.stopPropagation());
-        styleSelect.addEventListener('change', () => {
-            this.settings.style = styleSelect.value;
-            if (onChange) onChange();
-        });
-        styleGroup.appendChild(styleLabel);
-        styleGroup.appendChild(styleSelect);
-        container.appendChild(styleGroup);
 
         // Color picker
         const colorGroup = document.createElement('div');

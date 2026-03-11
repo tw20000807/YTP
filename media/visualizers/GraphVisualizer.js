@@ -941,7 +941,7 @@ class GraphVisualizer extends GraphBaseVisualizer {
             this._bindDrag(g, nd, svg, NS);
 
             this._elements.push({
-                index: ni, domRef: g, text: nd.id,
+                index: nd.id, domRef: g, text: nd.id,
                 rect: { x: nd.x - NODE_R, y: nd.y - NODE_R, w: NODE_R * 2, h: NODE_R * 2 }
             });
         }

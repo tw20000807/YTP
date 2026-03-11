@@ -324,6 +324,7 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
 
     _syncDataFieldsUI() {
         if (!this._dataFieldsContainer) return;
+        if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(this._dataFieldsContainer);
         this._dataFieldsContainer.innerHTML = '';
         this.dataFields.forEach((name, idx) => {
             const row = this._mkDataFieldRow(name, idx);
@@ -333,6 +334,7 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
 
     _syncPointersUI() {
         if (!this._pointersContainer) return;
+        if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(this._pointersContainer);
         this._pointersContainer.innerHTML = '';
         this.pointers.forEach((ptr, idx) => {
             const row = this._mkPointerRow(ptr, idx);
@@ -881,31 +883,41 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
     }
 
     _drawCurved(NS, group, src, tgt, curveDir, edge, withArrow) {
-        const curvature = curveDir === 0 ? 25 : 45;
-        const sign = curveDir === -1 ? -1 : 1;
-
         const p1 = this._rectBorderPoint(src, tgt.cx, tgt.cy);
         const p2 = this._rectBorderPoint(tgt, src.cx, src.cy);
 
-        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-        const dx = p2.x - p1.x, dy = p2.y - p1.y;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const nx = dx / len, ny = dy / len;
-        const cx = mx - ny * curvature * sign;
-        const cy = my + nx * curvature * sign;
+        if (curveDir === 0) {
+            // Straight line for non-bidirectional edges
+            const line = document.createElementNS(NS, 'line');
+            line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+            line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+            line.setAttribute('class', 'viz-graph-edge');
+            if (withArrow) line.setAttribute('marker-end', 'url(#ll-arrow)');
+            group.appendChild(line);
+        } else {
+            // Curved path for bidirectional edges
+            const curvature = 45;
+            const sign = curveDir === -1 ? -1 : 1;
+            const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = dx / len, ny = dy / len;
+            const cx = mx - ny * curvature * sign;
+            const cy = my + nx * curvature * sign;
 
-        const path = document.createElementNS(NS, 'path');
-        path.setAttribute('d', `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`);
-        path.setAttribute('class', 'viz-graph-edge');
-        path.setAttribute('fill', 'none');
-        if (withArrow) path.setAttribute('marker-end', 'url(#ll-arrow)');
-        group.appendChild(path);
+            const path = document.createElementNS(NS, 'path');
+            path.setAttribute('d', `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`);
+            path.setAttribute('class', 'viz-graph-edge');
+            path.setAttribute('fill', 'none');
+            if (withArrow) path.setAttribute('marker-end', 'url(#ll-arrow)');
+            group.appendChild(path);
+        }
 
         if (edge.label) {
-            const lx = 0.25 * p1.x + 0.5 * cx + 0.25 * p2.x;
-            const ly = 0.25 * p1.y + 0.5 * cy + 0.25 * p2.y;
+            const mx = (p1.x + p2.x) / 2;
+            const my = (p1.y + p2.y) / 2;
             const lbl = document.createElementNS(NS, 'text');
-            lbl.setAttribute('x', lx); lbl.setAttribute('y', ly);
+            lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
             lbl.setAttribute('class', 'viz-graph-edge-label');
             lbl.setAttribute('text-anchor', 'middle');
             lbl.setAttribute('dominant-baseline', 'central');
