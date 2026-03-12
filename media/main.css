@@ -657,10 +657,10 @@ body {
     padding: 10px;
 }
 
-.viz-array-value--changed {
+/* .viz-array-value--changed {
     background-color: #b8860b;
     color: #1e1e1e;
-}
+} */
 /* -----------modify----------- */
 
 .viz-matrix-val--changed {

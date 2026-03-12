@@ -7,7 +7,7 @@ class ArrayVisualizer extends BaseVisualizer {
         this.base = 0;
         this.limit = null; // null = show all (inclusive end index)
         this.indexLabel = 'index'; // 'index' | 'name'
-        this.allVariable = null;
+        // this.allVariable = null;
         this.variable = null;
         this._prevValues = new Map(); // index -> previous value string
         this._dynBoxW = null; // dynamic box width set by onContainerResize
@@ -15,7 +15,7 @@ class ArrayVisualizer extends BaseVisualizer {
         this._lastRows = 1; // track rows for hysteresis
         this.dataFields = []; // {fieldName, nickname}[] – struct field names to show per element
 
-        this.pointers = []; // (name, val)
+        // this.pointers = []; // (name, val)
         // Content area: connected boxes
         this.arrayBoxContainer = document.createElement('div');
         this.arrayBoxContainer.className = 'viz-array-container';
@@ -35,11 +35,11 @@ class ArrayVisualizer extends BaseVisualizer {
     }
 
     getParams() {
-        return { base: this.base, limit: this.limit, pointers: this.pointers };
+        return { base: this.base, limit: this.limit};
     }
 
     /** Restore state. Does NOT render — caller invokes update() afterwards. */
-    setParams({ base, limit, pointers } = {}) {
+    setParams({ base, limit } = {}) {
         if (base !== undefined) {
             this.base = Math.max(0, parseInt(base) || 0);
             if (this._baseInput) this._baseInput.value = this.base === 0 ? '' : this.base;
@@ -48,10 +48,10 @@ class ArrayVisualizer extends BaseVisualizer {
             this.limit = limit === null ? null : Math.max(0, parseInt(limit) || 0);
             if (this._limitInput) this._limitInput.value = this.limit === null ? '' : this.limit;
         }
-        if (pointers !== undefined) {
-            this.pointers = pointers;
-            this._syncPointersUI();
-        }
+        // if (pointers !== undefined) {
+        //     this.pointers = pointers;
+        //     this._syncPointersUI();
+        // }
     }
 
     _buildToolbar() {
@@ -114,43 +114,43 @@ class ArrayVisualizer extends BaseVisualizer {
         this._indexLabelBtn.textContent = this.indexLabel === 'index' ? 'Index' : 'Name';
         this._indexLabelBtn.classList.toggle('viz-toggle--active', this.indexLabel === 'name');
     }
-    _syncPointersUI() {
-        if (!this._pointersContainer) return;
-        this._pointersContainer.innerHTML = '';
-        this.pointers.forEach((ptr, idx) => {
-            const row = this._mkPointerRow(ptr, idx);
-            this._pointersContainer.appendChild(row);
-        });
-    }
-    _mkPointerRow(ptr, idx) {
-        const row = document.createElement('div');
-        row.className = 'viz-ll-row';
+    // _syncPointersUI() {
+    //     if (!this._pointersContainer) return;
+    //     this._pointersContainer.innerHTML = '';
+    //     this.pointers.forEach((ptr, idx) => {
+    //         const row = this._mkPointerRow(ptr, idx);
+    //         this._pointersContainer.appendChild(row);
+    //     });
+    // }
+    // _mkPointerRow(ptr, idx) {
+    //     const row = document.createElement('div');
+    //     row.className = 'viz-ll-row';
 
-        const pointInput = document.createElement('input');
-        pointInput.type = 'text';
-        pointInput.className = 'viz-ll-input';
-        pointInput.placeholder = 'pointer name';
-        pointInput.value = ptr.name;
-        pointInput.addEventListener('mousedown', e => e.stopPropagation());
-        pointInput.addEventListener('change', e => {
-            this.pointers[idx].name = e.target.value.trim();
-            this._render();
-        });
+    //     const pointInput = document.createElement('input');
+    //     pointInput.type = 'text';
+    //     pointInput.className = 'viz-ll-input';
+    //     pointInput.placeholder = 'pointer name';
+    //     pointInput.value = ptr.name;
+    //     pointInput.addEventListener('mousedown', e => e.stopPropagation());
+    //     pointInput.addEventListener('change', e => {
+    //         this.pointers[idx].name = e.target.value.trim();
+    //         this._render();
+    //     });
 
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'viz-ll-remove-btn';
-        removeBtn.textContent = '×';
-        removeBtn.addEventListener('mousedown', e => e.stopPropagation());
-        removeBtn.addEventListener('click', () => {
-            this.pointers.splice(idx, 1);
-            this._syncPointersUI();
-            this._render();
-        });
+    //     const removeBtn = document.createElement('button');
+    //     removeBtn.className = 'viz-ll-remove-btn';
+    //     removeBtn.textContent = '×';
+    //     removeBtn.addEventListener('mousedown', e => e.stopPropagation());
+    //     removeBtn.addEventListener('click', () => {
+    //         this.pointers.splice(idx, 1);
+    //         this._syncPointersUI();
+    //         this._render();
+    //     });
 
-        row.appendChild(pointInput);
-        row.appendChild(removeBtn);
-        return row;
-    }
+    //     row.appendChild(pointInput);
+    //     row.appendChild(removeBtn);
+    //     return row;
+    // }
 
     _createControl(toolbar, labelText, initialValue, onChange) {
         const group = document.createElement('div');
@@ -175,13 +175,13 @@ class ArrayVisualizer extends BaseVisualizer {
         return input;
     }
 
-    update(variable, allVariable) {
+    update(variable) {
         // Snapshot previous values keyed by index before overwriting
         this._prevValues = new Map();
         if (this.variable && this.variable.children) {
             this.variable.children.forEach((c, i) => this._prevValues.set(i, c.value));
         }
-        this.allVariable = allVariable;
+        // this.allVariable = allVariable;
         this.variable = variable;
         this._syncAdvancedUI();
         
@@ -403,18 +403,18 @@ class ArrayVisualizer extends BaseVisualizer {
             this.arrayBoxContainer.appendChild(msg);
             return;
         }
-        if (this.allVariable && this.pointers.length > 0) {
-            this.pointers.forEach(ptr => {
-                const v = this.allVariable.get(ptr.name);
-                ptr.value = null;
-                if (v) {
-                    const idx = parseInt(v.value);
-                    if (!isNaN(idx)) {
-                        ptr.value = idx;
-                    }
-                }
-            });
-        }
+        // if (this.allVariable && this.pointers.length > 0) {
+        //     this.pointers.forEach(ptr => {
+        //         const v = this.allVariable.get(ptr.name);
+        //         ptr.value = null;
+        //         if (v) {
+        //             const idx = parseInt(v.value);
+        //             if (!isNaN(idx)) {
+        //                 ptr.value = idx;
+        //             }
+        //         }
+        //     });
+        // }
 
         const children = this.variable.children;
         const { start, end } = this._rangeBounds(children.length);
@@ -434,14 +434,15 @@ class ArrayVisualizer extends BaseVisualizer {
             if (this._dynBoxH) {
                 box.style.height = this._dynBoxH;
             }
-            const matchedPointers = this.pointers.filter(p => p.value === i);
+            // const matchedPointers = this.pointers.filter(p => p.value === i);
             
 
             const indexEl = document.createElement('div');
-            if (matchedPointers.length > 0) {
-                indexEl.className = 'viz-array-index viz-array-index--pointer';
-                indexEl.textContent = matchedPointers.map(p => p.name).join(',');
-            } else if (this.indexLabel === 'name') {
+            // if (matchedPointers.length > 0) {
+            //     indexEl.className = 'viz-array-index viz-array-index--pointer';
+            //     indexEl.textContent = matchedPointers.map(p => p.name).join(',');
+            // } else 
+            if (this.indexLabel === 'name') {
                 indexEl.className = 'viz-array-index';
                 // Show the child's own name (e.g. [0], [1]) not the parent array name
                 const childName = child.name || '';
