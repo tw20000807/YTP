@@ -5,12 +5,14 @@ using namespace std;
 int main(){
     int N = 5;
     int pointer = 3;
+    int l = 1,r = 2;
+    vector<string> data{"abc","def","ghi","ijk","jkl"};
     {
         // graph
         vector<vector<int>> adjcent_matrix(N,vector<int>(N,0));
-        vector<vector<int>> adjcent_matrix2(N,vector<int>(N,0));
         vector<vector<int>> adjcent_list(N);
-        vector<pair<int,int>> pair_next{{-1,-1},{0,1},{0,2},{1,1},{1,2}};
+        vector<pair<int,int>> pair_next{{-1,-1},{0,1},
+                                        {0,2},{1,1},{1,2}};
         vector<vector<pair<int,int>>> pair_list(N);
         vector<array<int,3>> uvw {{1,2,1},{2,3,1},{1,4,2},{2,4,3}};
         vector<int> next(N);

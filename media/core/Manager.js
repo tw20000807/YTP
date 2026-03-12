@@ -1,6 +1,20 @@
 // @ts-nocheck
 console.log('[YTP] Manager.js loaded');
 
+/**
+ * Extract the clean leaf name from an evaluateName or dotted path.
+ * e.g. "((p1).p2).child1" → "child1",  "(head)->next" → "next"
+ * Used to build clean varMap keys and display names.
+*/
+function _cleanVarLeaf(name) {
+    const parts = (name || '').split(/->|\./);
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const s = parts[i].replace(/[()]/g, '').trim();
+        if (s) return s;
+    }
+    return name || '';
+}
+
 class VisualizerManager {
     constructor() {
         this.blocks          = new Map(); // path -> BlockEntry (currently visible)
@@ -1023,7 +1037,11 @@ class VisualizerManager {
 
             const varName = document.createElement('span');
             varName.className = 'modifier-var';
-            varName.textContent = mDef.varPath || '—';
+            if (mDef.type === 'range' && mDef.settings && mDef.settings.loVarPath) {
+                varName.textContent = `L:${mDef.settings.loVarPath} R:${mDef.settings.hiVarPath || '—'}`;
+            } else {
+                varName.textContent = mDef.varPath || '—';
+            }
 
             const removeBtn = document.createElement('button');
             removeBtn.className = 'block-btn modifier-remove';
@@ -1130,8 +1148,7 @@ class VisualizerManager {
         typeGroup.appendChild(typeInput);
         picker.appendChild(typeGroup);
 
-        // ── Variable: text input with CustomDropdown ──
-        // Show children of the block's variable first, then all other variables
+        // ── Variable: text input with CustomDropdown (non-range types) ──
         const varGroup = document.createElement('div');
         varGroup.className = 'viz-control';
         const varLabel = document.createElement('span');
@@ -1158,7 +1175,7 @@ class VisualizerManager {
                 const blockVar = varMap.get(path);
                 if (blockVar && Array.isArray(blockVar.children)) {
                     blockVar.children.forEach(child => {
-                        const childPath = `${path}.${child.name}`;
+                        const childPath = `${path}.${_cleanVarLeaf(child.name)}`;
                         if (varMap.has(childPath)) childPaths.push(childPath);
                     });
                 }
@@ -1179,31 +1196,126 @@ class VisualizerManager {
         varGroup.appendChild(varInput);
         picker.appendChild(varGroup);
 
+        // ── Range-specific inputs: L, R, and bracket type (shown only for range) ──
+        const rangeGroup = document.createElement('div');
+        rangeGroup.className = 'modifier-picker-range';
+        rangeGroup.style.display = 'none';
+
+        const getAllVarPaths = () => {
+            if (!window.controller || !window.controller.varMap) return [];
+            return Array.from(window.controller.varMap.keys()).sort((a, b) =>
+                a.localeCompare(b, undefined, { sensitivity: 'base' })
+            );
+        };
+
+        // L input
+        const loGroup = document.createElement('div');
+        loGroup.className = 'viz-control';
+        const loLabel = document.createElement('span');
+        loLabel.className = 'viz-ctrl-label';
+        loLabel.textContent = 'L: ';
+        const loInput = document.createElement('input');
+        loInput.type = 'text';
+        loInput.className = 'viz-input';
+        loInput.placeholder = 'l variable';
+        loInput.addEventListener('mousedown', e => e.stopPropagation());
+        if (typeof CustomDropdown !== 'undefined') {
+            CustomDropdown.attach(loInput, getAllVarPaths, { matchMode: 'prefix', sort: true, resetScrollOnShow: true });
+        }
+        loGroup.appendChild(loLabel);
+        loGroup.appendChild(loInput);
+        rangeGroup.appendChild(loGroup);
+
+        // R input
+        const hiGroup = document.createElement('div');
+        hiGroup.className = 'viz-control';
+        const hiLabel = document.createElement('span');
+        hiLabel.className = 'viz-ctrl-label';
+        hiLabel.textContent = 'R: ';
+        const hiInput = document.createElement('input');
+        hiInput.type = 'text';
+        hiInput.className = 'viz-input';
+        hiInput.placeholder = 'r variable';
+        hiInput.addEventListener('mousedown', e => e.stopPropagation());
+        if (typeof CustomDropdown !== 'undefined') {
+            CustomDropdown.attach(hiInput, getAllVarPaths, { matchMode: 'prefix', sort: true, resetScrollOnShow: true });
+        }
+        hiGroup.appendChild(hiLabel);
+        hiGroup.appendChild(hiInput);
+        rangeGroup.appendChild(hiGroup);
+
+        // Bracket type dropdown
+        const btGroup = document.createElement('div');
+        btGroup.className = 'viz-control';
+        const btLabel = document.createElement('span');
+        btLabel.className = 'viz-ctrl-label';
+        btLabel.textContent = 'Range: ';
+        const btSel = document.createElement('select');
+        btSel.className = 'viz-select';
+        btSel.addEventListener('mousedown', e => e.stopPropagation());
+        [['[l,r]','[,]'], ['(l,r)','(,)'], ['[l,r)','[,)'], ['(l,r]','(,]']].forEach(([label, val]) => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = label;
+            btSel.appendChild(opt);
+        });
+        btGroup.appendChild(btLabel);
+        btGroup.appendChild(btSel);
+        rangeGroup.appendChild(btGroup);
+
+        picker.appendChild(rangeGroup);
+
+        // Toggle between single-var and range inputs based on selected type
+        const updatePickerInputs = () => {
+            if (typeInput.value === 'range') {
+                varGroup.style.display = 'none';
+                rangeGroup.style.display = '';
+            } else {
+                varGroup.style.display = '';
+                rangeGroup.style.display = 'none';
+            }
+        };
+        typeInput.addEventListener('change', updatePickerInputs);
+        updatePickerInputs(); // apply on initial render
+
         // Confirm button
         const okBtn = document.createElement('button');
         okBtn.className = 'block-btn';
         okBtn.textContent = 'Add';
         okBtn.onclick = (e) => {
             e.stopPropagation();
-            let modType = typeInput.value;
-            let varPath = varInput.value.trim();
+            const modType = typeInput.value;
 
-            if (window.controller && window.controller.varMap) {
-                const paths = Array.from(window.controller.varMap.keys());
-                const pathLo = varPath.toLowerCase();
-                varPath = paths.find(p => p === varPath)
-                    || paths.find(p => p.toLowerCase() === pathLo)
-                    || paths.find(p => p.toLowerCase().startsWith(pathLo))
-                    || varPath;
-            }
-
-            if (modType && varPath) {
+            if (modType === 'range') {
+                // Range: use L and R inputs
+                const lo = loInput.value.trim();
+                const hi = hiInput.value.trim();
+                if (!lo || !hi) return;
+                // Store L as varPath, R + bracket in settings
+                this.addModifier(path, modType, lo, {
+                    loVarPath: lo,
+                    hiVarPath: hi,
+                    bracketType: btSel.value
+                });
+            } else {
+                // Other types: single variable
+                let varPath = varInput.value.trim();
+                if (!varPath) return;
+                if (window.controller && window.controller.varMap) {
+                    const paths = Array.from(window.controller.varMap.keys());
+                    const pathLo = varPath.toLowerCase();
+                    varPath = paths.find(p => p === varPath)
+                        || paths.find(p => p.toLowerCase() === pathLo)
+                        || paths.find(p => p.toLowerCase().startsWith(pathLo))
+                        || varPath;
+                }
                 this.addModifier(path, modType, varPath);
-                const kb2 = this.knownBlocks.get(path);
-                const newIdx = kb2 && kb2.modifiers ? kb2.modifiers.length - 1 : -1;
-                if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(picker);
-                this._refreshModifierUI(path, newIdx);
             }
+
+            const kb2 = this.knownBlocks.get(path);
+            const newIdx = kb2 && kb2.modifiers ? kb2.modifiers.length - 1 : -1;
+            if (typeof CustomDropdown !== 'undefined') CustomDropdown.detachAll(picker);
+            this._refreshModifierUI(path, newIdx);
         };
         picker.appendChild(okBtn);
 
@@ -1256,7 +1368,7 @@ class VisualizerManager {
         for (const mi of entry.modifierInstances) {
             mi.instance.clear(elements);
             const modData = mi.varPath ? varMap.get(mi.varPath) : null;
-            mi.instance.apply(elements, modData);
+            mi.instance.apply(elements, modData, varMap);
         }
     }
 
@@ -1322,8 +1434,16 @@ class VisualizerManager {
 
         const entry = this.blocks.get(path);
         if (entry && entry.modifierInstances) {
+            // Clear the removed modifier's visual effects before splicing
+            const elements = entry.visualizer.getElements ? entry.visualizer.getElements() : [];
+            if (entry.modifierInstances[idx]) {
+                entry.modifierInstances[idx].instance.clear(elements);
+            }
             const removed = entry.modifierInstances.splice(idx, 1);
             if (removed[0] && removed[0].instance.dispose) removed[0].instance.dispose();
+            // Re-apply remaining modifiers so the visualizer rerenders cleanly
+            const vm = window.controller ? window.controller.varMap : new Map();
+            this._applyModifiers(entry, vm);
         }
         if (window.controller) window.controller.saveState();
     }

@@ -29,18 +29,33 @@ const CustomDropdown = (() => {
         document.body.appendChild(dropdown);
 
         let activeIndex = -1;
-        let selecting = false; // flag to prevent blur from hiding during selection
+
+        // Suppress native browser autocomplete (doesn't work in webviews)
+        input.setAttribute('autocomplete', 'off');
 
         const position = () => {
             const rect = input.getBoundingClientRect();
-            if (rect.width === 0 && rect.height === 0) return; // input not laid out
-            // Use absolute positioning relative to body (accounts for scroll)
-            const scrollX = window.scrollX || window.pageXOffset || 0;
-            const scrollY = window.scrollY || window.pageYOffset || 0;
-            dropdown.style.position = 'absolute';
-            dropdown.style.left  = `${rect.left + scrollX}px`;
-            dropdown.style.top   = `${rect.bottom + scrollY}px`;
-            dropdown.style.width = `${Math.max(rect.width, 120)}px`;
+            if (rect.width === 0 && rect.height === 0) return;
+            // Use fixed positioning – getBoundingClientRect already gives
+            // viewport-relative coords, so no scroll-offset math is needed.
+            // This is the most reliable approach inside VSCode webview iframes.
+            dropdown.style.position = 'fixed';
+            const dropW = Math.max(rect.width, 120);
+            dropdown.style.left  = `${rect.left}px`;
+            dropdown.style.width = `${dropW}px`;
+
+            // Flip above the input if there isn't enough room below
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+            if (spaceBelow < 120 && spaceAbove > spaceBelow) {
+                dropdown.style.top  = '';
+                dropdown.style.bottom = `${window.innerHeight - rect.top}px`;
+                dropdown.style.maxHeight = `${Math.min(180, spaceAbove - 4)}px`;
+            } else {
+                dropdown.style.bottom = '';
+                dropdown.style.top    = `${rect.bottom}px`;
+                dropdown.style.maxHeight = `${Math.min(180, spaceBelow - 4)}px`;
+            }
         };
 
         const show = () => {
@@ -68,19 +83,17 @@ const CustomDropdown = (() => {
                 const item = document.createElement('div');
                 item.className = ITEM_CLASS;
                 item.textContent = opt;
-                item.addEventListener('pointerdown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    selecting = true;
-                });
-                item.addEventListener('click', (e) => {
+                // Use mousedown for selection — it fires before blur, so
+                // preventDefault() keeps focus on the input and we can
+                // set the value synchronously.  This is the most reliable
+                // pattern inside VSCode webview iframes where pointerdown
+                // + click timing can be unreliable.
+                item.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     input.value = opt;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
-                    selecting = false;
                     hide();
-                    input.focus();
                 });
                 dropdown.appendChild(item);
             });
@@ -97,16 +110,12 @@ const CustomDropdown = (() => {
 
         const onFocus = () => show();
         const onClick = () => {
-            // Backup: ensure dropdown shows even if focus didn't fire
             if (dropdown.style.display === 'none') show();
         };
         const onInput = () => show();
         const onBlur  = () => {
-            // Delay hide so click on dropdown item fires first
-            setTimeout(() => {
-                if (!selecting) hide();
-                selecting = false;
-            }, 200);
+            // Small delay so mousedown on dropdown item fires first
+            setTimeout(hide, 150);
         };
         const onKeydown = (e) => {
             if (dropdown.style.display === 'none') return;

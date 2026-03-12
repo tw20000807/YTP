@@ -335,7 +335,7 @@ class HeapVisualizer extends GraphBaseVisualizer {
             }
         }
 
-        const hSpacing = 55;  // horizontal distance between nodes at the deepest level
+        const hSpacing = 60;  // horizontal distance between nodes at the deepest level
         const vSpacing = 65;  // vertical distance between layers
 
         // Position nodes top-down: root at center, children offset from parent
@@ -413,7 +413,7 @@ class HeapVisualizer extends GraphBaseVisualizer {
         }
 
         const NS = 'http://www.w3.org/2000/svg';
-        const NODE_R = 22;
+        const NODE_R = 28;
         const ch = this.variable.children;
 
         const nodeExtents = this._nodes.map(nd => ({

@@ -464,7 +464,7 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
     _parseLinkedList() {
         const nodes = [];
         const edges = [];
-        const visited = new Set();
+        const visitedByValue = new Map(); // value (ptr addr) → nodeId
 
         if (!this.variable) return { nodes, edges };
 
@@ -473,8 +473,9 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
         const ptrMap = new Map(ptrList.map(p => [p.fieldName, p.nickname]));
 
         const traverse = (varData, nodeId) => {
-            if (visited.has(nodeId)) return;
-            visited.add(nodeId);
+            const addr = varData.value;
+            if (visitedByValue.has(addr)) return;
+            visitedByValue.set(addr, nodeId);
 
             const nodeData = [];
             nodes.push({ id: nodeId, x: undefined, y: undefined, data: nodeData });
@@ -491,9 +492,15 @@ class LinkedListVisualizer extends GraphBaseVisualizer {
             for (const [ptrPath, nickname] of ptrMap) {
                 const ptrChild = this._resolvePointerChild(varData, ptrPath);
                 if (ptrChild && ptrChild.children && ptrChild.children.length > 0) {
-                    const childId = ptrChild.name;
-                    edges.push({ from: nodeId, to: childId, label: nickname || '' });
-                    if (!visited.has(childId)) traverse(ptrChild, childId);
+                    const childAddr = ptrChild.value;
+                    if (visitedByValue.has(childAddr)) {
+                        // Back edge to already-visited node
+                        edges.push({ from: nodeId, to: visitedByValue.get(childAddr), label: nickname || '' });
+                    } else {
+                        const childId = ptrChild.name;
+                        edges.push({ from: nodeId, to: childId, label: nickname || '' });
+                        traverse(ptrChild, childId);
+                    }
                 }
             }
         };

@@ -110,16 +110,36 @@ export class WebviewManager implements vscode.Disposable {
         // BaseVisualizer.js must load first so subclasses can extend it
         const visualizersDir = vscode.Uri.joinPath(this.extensionUri, 'media', 'visualizers');
         const visualizerFiles = await vscode.workspace.fs.readDirectory(visualizersDir);
+        // Custom load order determines dropdown order (registration order = Map insertion order)
+        const vizLoadOrder = [
+            'TextVisualizer.js',
+            'ArrayVisualizer.js',
+            'BarVisualizer.js',
+            'MatrixVisualizer.js',
+            'GraphBaseVisualizer.js',
+            'GraphVisualizer.js',
+            'LinkedListVisualizer.js',
+            'HeapVisualizer.js',
+        ];
+        const orderedVizFiles = visualizerFiles
+            .filter(([name, type]) =>
+                type === vscode.FileType.File &&
+                name.endsWith('.js') &&
+                name !== 'BaseVisualizer.js'
+            )
+            .map(([name]) => name);
+        // Sort: files in vizLoadOrder come first in that order, then any remaining alphabetically
+        orderedVizFiles.sort((a, b) => {
+            const ia = vizLoadOrder.indexOf(a);
+            const ib = vizLoadOrder.indexOf(b);
+            if (ia !== -1 && ib !== -1) return ia - ib;
+            if (ia !== -1) return -1;
+            if (ib !== -1) return 1;
+            return a.localeCompare(b);
+        });
         const visualizerPaths: string[][] = [
             ['media', 'visualizers', 'BaseVisualizer.js'], // always first
-            ...visualizerFiles
-                .filter(([name, type]) =>
-                    type === vscode.FileType.File &&
-                    name.endsWith('.js') &&
-                    name !== 'BaseVisualizer.js'
-                )
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([name]) => ['media', 'visualizers', name])
+            ...orderedVizFiles.map(name => ['media', 'visualizers', name])
         ];
 
         // Auto-discover modifier scripts from media/modifiers/

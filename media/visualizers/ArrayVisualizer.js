@@ -86,25 +86,25 @@ class ArrayVisualizer extends BaseVisualizer {
         ilGroup.appendChild(this._indexLabelBtn);
         toolbar.appendChild(ilGroup);
 
-        const ptrSection = document.createElement('div');
-        ptrSection.className = 'viz-ll-section';
-        const ptrSectionLabel = document.createElement('div');
-        ptrSectionLabel.className = 'viz-ll-section-title';
-        ptrSectionLabel.textContent = 'Pointers:';
-        ptrSection.appendChild(ptrSectionLabel);
-        this._pointersContainer = document.createElement('div');
-        this._pointersContainer.className = 'viz-ll-rows';
-        ptrSection.appendChild(this._pointersContainer);
-        const addPtrBtn = document.createElement('button');
-        addPtrBtn.className = 'viz-ll-add-btn';
-        addPtrBtn.textContent = '+ Add pointer';
-        addPtrBtn.addEventListener('mousedown', e => e.stopPropagation());
-        addPtrBtn.addEventListener('click', () => {
-            this.pointers.push({ name: '', value: null });
-            this._syncPointersUI();
-        });
-        ptrSection.appendChild(addPtrBtn);
-        toolbar.appendChild(ptrSection);
+        // const ptrSection = document.createElement('div');
+        // ptrSection.className = 'viz-ll-section';
+        // const ptrSectionLabel = document.createElement('div');
+        // ptrSectionLabel.className = 'viz-ll-section-title';
+        // ptrSectionLabel.textContent = 'Pointers:';
+        // ptrSection.appendChild(ptrSectionLabel);
+        // this._pointersContainer = document.createElement('div');
+        // this._pointersContainer.className = 'viz-ll-rows';
+        // ptrSection.appendChild(this._pointersContainer);
+        // const addPtrBtn = document.createElement('button');
+        // addPtrBtn.className = 'viz-ll-add-btn';
+        // addPtrBtn.textContent = '+ Add pointer';
+        // addPtrBtn.addEventListener('mousedown', e => e.stopPropagation());
+        // addPtrBtn.addEventListener('click', () => {
+        //     this.pointers.push({ name: '', value: null });
+        //     this._syncPointersUI();
+        // });
+        // ptrSection.appendChild(addPtrBtn);
+        // toolbar.appendChild(ptrSection);
 
         return toolbar;
     }
@@ -425,7 +425,7 @@ class ArrayVisualizer extends BaseVisualizer {
             const child = children[i];
             const box = document.createElement('div');
             const changed = this._prevValues.size > 0 && this._prevValues.get(i) !== child.value;
-            box.className = 'viz-array-box' + (changed ? ' viz-array-box--changed' : '');
+            box.className = 'viz-array-box';
             // Apply dynamic width determined by onContainerResize
             if (this._dynBoxW) {
                 box.style.width = this._dynBoxW;
@@ -457,7 +457,7 @@ class ArrayVisualizer extends BaseVisualizer {
             if (activeFields.length > 0 && child.children) {
                 // User-configured data fields: use path resolution
                 const valueEl = document.createElement('div');
-                valueEl.className = 'viz-array-value viz-array-value--multi';
+                valueEl.className = 'viz-array-value viz-array-value--multi' + (changed ? ' viz-array-value--changed' : '');
                 for (const df of activeFields) {
                     const val = this._resolveFieldValue(child, df.fieldName);
                     const displayName = df.nickname || df.fieldName;
@@ -480,11 +480,11 @@ class ArrayVisualizer extends BaseVisualizer {
                 const valueEl = document.createElement('div');
                 if (allFields.length <= 1) {
                     // No child or one child: display only the value
-                    valueEl.className = 'viz-array-value';
+                    valueEl.className = 'viz-array-value' + (changed ? ' viz-array-value--changed' : '');
                     valueEl.textContent = allFields.length === 1 ? String(allFields[0].value) : child.value;
                 } else {
                     // Multiple children: display as name: value, one per line
-                    valueEl.className = 'viz-array-value viz-array-value--multi';
+                    valueEl.className = 'viz-array-value viz-array-value--multi' + (changed ? ' viz-array-value--changed' : '');
                     for (const field of allFields) {
                         const line = document.createElement('div');
                         line.className = 'viz-array-field-line';
@@ -497,7 +497,7 @@ class ArrayVisualizer extends BaseVisualizer {
                 box.appendChild(valueEl);
             } else {
                 const valueEl = document.createElement('div');
-                valueEl.className = 'viz-array-value';
+                valueEl.className = 'viz-array-value' + (changed ? ' viz-array-value--changed' : '');
                 valueEl.textContent = child.value;
                 if (child.type) valueEl.title = child.type;
                 box.appendChild(indexEl);

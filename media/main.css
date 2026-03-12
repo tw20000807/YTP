@@ -256,6 +256,14 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
     padding: 8px 10px;   /* compensate for removed block-content padding */
+    transition: background-color 0.3s ease;
+}
+.viz-text--changed {
+    animation: viz-text-flash 1.5s ease-out;
+}
+@keyframes viz-text-flash {
+    0%   { background-color: rgba(255, 213, 79, 0.35); }
+    100% { background-color: transparent; }
 }
 
 /* Popup-open highlight */
@@ -649,11 +657,7 @@ body {
     padding: 10px;
 }
 
-.viz-array-box--changed {
-    box-shadow: none;
-}
-
-.viz-array-box--changed .viz-array-index {
+.viz-array-value--changed {
     background-color: #b8860b;
     color: #1e1e1e;
 }
@@ -951,7 +955,7 @@ body {
 /* ── Custom Dropdown (autocomplete) ──────────────────────────── */
 
 .ytp-custom-dropdown {
-    position: absolute;
+    position: fixed;
     z-index: 10000;
     background: var(--block-bg, #2d2d3d);
     border: 1px solid var(--border-color, #555);

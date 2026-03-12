@@ -69,7 +69,8 @@ class VisualizerController {
                     if (target.checked) {
                         const variable = this.varMap.get(path);
                         if(variable) {
-                            this.visualizerManager.createBlockWithPath(path, variable);
+                            const defaultType = (variable.children && variable.children.length > 0) ? 'array' : 'Text';
+                            this.visualizerManager.createBlockWithPath(path, variable, null, null, defaultType);
                         }
                     } else {
                         this.visualizerManager.removeBlock(path);
@@ -118,7 +119,8 @@ class VisualizerController {
         
         const traverse = (variables, parentPath) => {
             variables.forEach(v => {
-                const path = parentPath ? `${parentPath}.${v.name}` : v.name;
+                const cleanName = _cleanVarLeaf(v.name);
+                const path = parentPath ? `${parentPath}.${cleanName}` : cleanName;
                 this.varMap.set(path, v);
                 if (v.children && v.children.length > 0) {
                     traverse(v.children, path);
@@ -137,8 +139,9 @@ class VisualizerController {
         const list = document.getElementById('variable-list');
         if (!list) return;
         
-        // 1. Capture expansion state before clearing
+        // 1. Capture expansion state before clearing (from DOM + saved state)
         const expandedPaths = new Set();
+        // From current DOM
         const openDetails = list.querySelectorAll('details[open]');
         openDetails.forEach(details => {
             const checkbox = details.querySelector('.var-checkbox');
@@ -146,6 +149,10 @@ class VisualizerController {
                 expandedPaths.add(checkbox.dataset.path);
             }
         });
+        // From saved state (covers fresh webview load)
+        if (currentState.expandedPaths) {
+            currentState.expandedPaths.forEach(p => expandedPaths.add(p));
+        }
 
         list.innerHTML = '';
 
@@ -155,7 +162,8 @@ class VisualizerController {
             ul.style.paddingLeft = '20px';
 
             variables.forEach(v => {
-                const path = parentPath ? `${parentPath}.${v.name}` : v.name;
+                const cleanName = _cleanVarLeaf(v.name);
+                const path = parentPath ? `${parentPath}.${cleanName}` : cleanName;
                 const li = document.createElement('li');
                 
                 // Header - Only Checkbox and Name
@@ -177,13 +185,15 @@ class VisualizerController {
                 checkbox.type = 'checkbox';
                 checkbox.className = 'var-checkbox';
                 checkbox.dataset.path = path;
-                if (this.visualizerManager.hasBlock(path)) {
+                const isBlockActive = this.visualizerManager.hasBlock(path) ||
+                    (currentState.blocks && currentState.blocks.some(b => b.path === path && b.active !== false));
+                if (isBlockActive) {
                     checkbox.checked = true;
                 }
 
                 const name = document.createElement('span');
                 name.className = 'var-name';
-                name.textContent = v.name;
+                name.textContent = cleanName;
                 name.style.marginLeft = '5px';
                 name.style.cursor = 'default';
 
@@ -262,10 +272,20 @@ class VisualizerController {
         const isCollapsed = sidebar ? sidebar.classList.contains('collapsed') : false;
 
         const blocks = this.visualizerManager.getLayout();
+        // Capture expanded paths from sidebar
+        const varList = document.getElementById('variable-list');
+        const expanded = [];
+        if (varList) {
+            varList.querySelectorAll('details[open]').forEach(d => {
+                const cb = d.querySelector('.var-checkbox');
+                if (cb && cb.dataset.path) expanded.push(cb.dataset.path);
+            });
+        }
         const state = {
             splitPaneWidth: sidebarWidth,
             sidebarCollapsed: isCollapsed, 
-            blocks: blocks
+            blocks: blocks,
+            expandedPaths: expanded
         };
         vscode.setState(state);
         vscode.postMessage({ command: 'saveLayout', state: state });

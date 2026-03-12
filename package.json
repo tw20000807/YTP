@@ -1,9 +1,13 @@
 {
-  "name": "ytp-debugger",
-  "displayName": "YTP Debugger Variable Visualizer",
-  "description": "Fetch and print debug variables from C++ programs for competitive programming",
-  "version": "0.1.0",
-  "publisher": "ytp",
+  "name": "cpp-debugger",
+  "displayName": "C++ Debug Visualizer",
+  "description": "Fetch and show debug variables from C++ programs for competitive programming",
+  "version": "0.2.0",
+  "publisher": "brinton",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tw20000807/YTP"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },

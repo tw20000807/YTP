@@ -31,92 +31,48 @@ class LabelModifier extends BaseModifier {
             if (text === undefined || text === null) continue;
             if (!el.domRef) continue;
 
-            // SVG elements: create an SVG <text> element
-            if (el.domRef instanceof SVGElement && el.rect) {
+            // SVG elements: append a <tspan> to the existing <text> inside the node group
+            if (el.domRef instanceof SVGElement) {
                 const NS = 'http://www.w3.org/2000/svg';
-                const svgRoot = el.domRef.closest('svg');
-                if (!svgRoot) continue;
-
-                const labelEl = document.createElementNS(NS, 'text');
-                labelEl.setAttribute('fill', color);
-                labelEl.setAttribute('font-size', '10');
-                labelEl.setAttribute('font-weight', '600');
-                labelEl.setAttribute('text-anchor', 'middle');
-                labelEl.setAttribute('pointer-events', 'none');
-                labelEl.textContent = String(text);
-
-                const pos = this.settings.position || 'bottom';
-                if (pos === 'top') {
-                    labelEl.setAttribute('x', el.rect.x + el.rect.w / 2);
-                    labelEl.setAttribute('y', el.rect.y - 4);
-                } else if (pos === 'right') {
-                    labelEl.setAttribute('x', el.rect.x + el.rect.w + 4);
-                    labelEl.setAttribute('y', el.rect.y + el.rect.h / 2);
-                    labelEl.setAttribute('text-anchor', 'start');
-                    labelEl.setAttribute('dominant-baseline', 'central');
-                } else {
-                    labelEl.setAttribute('x', el.rect.x + el.rect.w / 2);
-                    labelEl.setAttribute('y', el.rect.y + el.rect.h + 12);
+                const existingText = el.domRef.querySelector('text[text-anchor]');
+                if (existingText) {
+                    const tspan = document.createElementNS(NS, 'tspan');
+                    tspan.setAttribute('x', '0');
+                    tspan.setAttribute('dy', '1.2em');
+                    tspan.setAttribute('fill', color);
+                    tspan.setAttribute('font-size', '10');
+                    tspan.setAttribute('font-weight', '600');
+                    tspan.textContent = String(text);
+                    existingText.appendChild(tspan);
+                    this._createdLabels.push(tspan);
                 }
-
-                svgRoot.appendChild(labelEl);
-                this._createdLabels.push(labelEl);
                 continue;
             }
 
-            // HTML elements
-            const labelEl = document.createElement('span');
-            labelEl.className = 'viz-modifier-label';
-            labelEl.textContent = String(text);
-            labelEl.style.color = color;
-            labelEl.style.fontSize = '10px';
-            labelEl.style.fontWeight = '600';
-            labelEl.style.position = 'absolute';
-            labelEl.style.pointerEvents = 'none';
-            labelEl.style.whiteSpace = 'nowrap';
-
-            const parent = el.domRef.parentElement;
-            if (!parent) continue;
-            parent.style.position = parent.style.position || 'relative';
-
-            if (el.rect) {
-                // Position relative to element rect
-                const pos = this.settings.position || 'bottom';
-                if (pos === 'top') {
-                    labelEl.style.left = `${el.rect.x + el.rect.w / 2}px`;
-                    labelEl.style.top = `${el.rect.y - 14}px`;
-                    labelEl.style.transform = 'translateX(-50%)';
-                } else if (pos === 'right') {
-                    labelEl.style.left = `${el.rect.x + el.rect.w + 4}px`;
-                    labelEl.style.top = `${el.rect.y + el.rect.h / 2}px`;
-                    labelEl.style.transform = 'translateY(-50%)';
-                } else {
-                    labelEl.style.left = `${el.rect.x + el.rect.w / 2}px`;
-                    labelEl.style.top = `${el.rect.y + el.rect.h + 2}px`;
-                    labelEl.style.transform = 'translateX(-50%)';
-                }
-            } else {
-                // HTML element: position using getBoundingClientRect
-                const rect = el.domRef.getBoundingClientRect();
-                const parentRect = parent.getBoundingClientRect();
-                const pos = this.settings.position || 'bottom';
-                if (pos === 'top') {
-                    labelEl.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
-                    labelEl.style.top = `${rect.top - parentRect.top - 14}px`;
-                    labelEl.style.transform = 'translateX(-50%)';
-                } else if (pos === 'right') {
-                    labelEl.style.left = `${rect.right - parentRect.left + 4}px`;
-                    labelEl.style.top = `${rect.top - parentRect.top + rect.height / 2}px`;
-                    labelEl.style.transform = 'translateY(-50%)';
-                } else {
-                    labelEl.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
-                    labelEl.style.top = `${rect.bottom - parentRect.top + 2}px`;
-                    labelEl.style.transform = 'translateX(-50%)';
-                }
+            // HTML elements: append text inside .viz-array-value
+            const valueEl = el.domRef.querySelector('.viz-array-value');
+            if (valueEl) {
+                const labelSpan = document.createElement('div');
+                labelSpan.className = 'viz-modifier-label-inline';
+                labelSpan.textContent = String(text);
+                labelSpan.style.color = color;
+                labelSpan.style.fontSize = '10px';
+                labelSpan.style.fontWeight = '600';
+                labelSpan.style.lineHeight = '1';
+                valueEl.appendChild(labelSpan);
+                this._createdLabels.push(labelSpan);
+                continue;
             }
 
-            parent.appendChild(labelEl);
-            this._createdLabels.push(labelEl);
+            // Fallback: append a span as a child of the domRef itself
+            const labelSpan = document.createElement('div');
+            labelSpan.className = 'viz-modifier-label-inline';
+            labelSpan.textContent = String(text);
+            labelSpan.style.color = color;
+            labelSpan.style.fontSize = '10px';
+            labelSpan.style.fontWeight = '600';
+            el.domRef.appendChild(labelSpan);
+            this._createdLabels.push(labelSpan);
         }
     }
 
@@ -148,29 +104,6 @@ class LabelModifier extends BaseModifier {
     getSettingsUI(onChange) {
         const container = document.createElement('div');
         container.className = 'modifier-settings';
-
-        // Position selector
-        const posGroup = document.createElement('div');
-        posGroup.className = 'viz-control';
-        const posLabel = document.createElement('span');
-        posLabel.className = 'viz-ctrl-label';
-        posLabel.textContent = 'Position: ';
-        const posSelect = document.createElement('select');
-        posSelect.className = 'viz-select';
-        ['top', 'bottom', 'right'].forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p; opt.textContent = p;
-            if (p === this.settings.position) opt.selected = true;
-            posSelect.appendChild(opt);
-        });
-        posSelect.addEventListener('mousedown', e => e.stopPropagation());
-        posSelect.addEventListener('change', () => {
-            this.settings.position = posSelect.value;
-            if (onChange) onChange();
-        });
-        posGroup.appendChild(posLabel);
-        posGroup.appendChild(posSelect);
-        container.appendChild(posGroup);
 
         // Color picker
         const colorGroup = document.createElement('div');

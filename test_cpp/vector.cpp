@@ -11,6 +11,7 @@ struct P{
 int main(){
     int arr[10] = {};
     int n = 3;
+    int l = 2,r = 5;
     vector<array<int,3>> add3(glo);
     vector<pair<int,int>> add2(glo);
     vector<P> pts(glo);
@@ -20,6 +21,8 @@ int main(){
         add2[i] = {i,i+1};
         pts[i] = P(i,-i);
     }
-    for(int i = 0; i < 10; ++i) cout << arr[i] << " \n"[i == 9];
+    for(int i = 0; i < 10; ++i) {
+        cout << arr[i] << " \n"[i == 9];
+    }
 
 }

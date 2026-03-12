@@ -39,16 +39,12 @@ class PointerModifier extends BaseModifier {
             return;
         }
 
-        // HTML array boxes: highlight both index and value cells, not the outer box.
+        // HTML array boxes: highlight only the index cell.
         const indexEl = target.domRef.querySelector('.viz-array-index');
-        const valueEl = target.domRef.querySelector('.viz-array-value');
-        if (indexEl && valueEl) {
+        if (indexEl) {
             indexEl.style.backgroundColor = color + '33';
             indexEl.style.boxShadow = `inset 0 0 0 2px ${color}`;
-            valueEl.style.backgroundColor = color + '33';
-            valueEl.style.boxShadow = `inset 0 0 0 2px ${color}`;
             this._appliedElements.push({ domRef: indexEl, style: 'highlight' });
-            this._appliedElements.push({ domRef: valueEl, style: 'highlight' });
             return;
         }
 

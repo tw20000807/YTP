@@ -468,6 +468,10 @@ class GraphVisualizer extends GraphBaseVisualizer {
                     }
                 }
             }
+            // Unwrap single-child containers (e.g. std::array's _M_elems)
+            if (!child && current.children.length === 1 && current.children[0].children) {
+                child = current.children[0].children.find(gc => this._leafName(gc.name) === part);
+            }
             if (!child) return undefined;
             current = child;
         }
@@ -512,8 +516,9 @@ class GraphVisualizer extends GraphBaseVisualizer {
 
         this.variable = variable;
 
-        // Auto-detect format and direction only on the very first call.
-        // On subsequent updates keep the user's (or auto-detected) settings.
+        // Auto-detect format and direction only on the very first call
+        // (format === null). Once a format is set (by auto-detect or user),
+        // never override it — the user may have manually selected edge_list etc.
         const isFirstCall = this.format === null;
         if (isFirstCall) {
             const fmt = this._detectFormat(variable);
@@ -564,8 +569,19 @@ class GraphVisualizer extends GraphBaseVisualizer {
         const edges = [];
         if (format === 'next') {
             for (let i = start; i <= end; i++) {
-                const to = parseInt(children[i].value);
-                if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight: null });
+                let to;
+                if (this.nextField) {
+                    const val = this._resolveFieldValue(children[i], this.nextField);
+                    to = val !== undefined ? parseInt(val) : NaN;
+                } else {
+                    to = parseInt(children[i].value);
+                }
+                let weight = null;
+                if (this.weightField) {
+                    const wv = this._resolveFieldValue(children[i], this.weightField);
+                    weight = wv !== undefined ? wv : null;
+                }
+                if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight });
             }
         } else if (format === 'adj_list') {
             for (let i = start; i <= end; i++) {
@@ -604,32 +620,51 @@ class GraphVisualizer extends GraphBaseVisualizer {
         return { nodes, edges };
     }
 
+    /** Collect all leaf values from a variable node, drilling through any
+     *  intermediate wrappers (e.g. _M_elems, _Elems, [N] containers). */
+    _collectLeafValues(varData) {
+        const leaves = [];
+        const collect = (node) => {
+            if (!node.children || node.children.length === 0) {
+                leaves.push(node.value);
+                return;
+            }
+            for (const ch of node.children) collect(ch);
+        };
+        if (varData && varData.children) {
+            for (const ch of varData.children) collect(ch);
+        }
+        return leaves;
+    }
+
     /** Parse an edge-list array: each element is (u, v) or (u, v, w). */
     _parseEdgeListSnapshot(children, start, end) {
         const nodeSet = new Set();
         const edges = [];
-        for (let i = start; i <= end; i++) {
+        for (let i = 0; i < children.length; i++) {
             const entry = children[i];
-            const subs = entry.children || [];
+            // Collect leaf values once per entry (handles any nesting like _M_elems)
+            const leaves = (!this.edgeListFrom || !this.edgeListTo) ? this._collectLeafValues(entry) : null;
             let u, v, w = null;
             if (this.edgeListFrom) {
                 const val = this._resolveFieldValue(entry, this.edgeListFrom);
                 u = val !== undefined ? parseInt(val) : NaN;
             } else {
-                u = subs.length > 0 ? parseInt(subs[0].value) : NaN;
+                u = leaves.length > 0 ? parseInt(leaves[0]) : NaN;
             }
             if (this.edgeListTo) {
                 const val = this._resolveFieldValue(entry, this.edgeListTo);
                 v = val !== undefined ? parseInt(val) : NaN;
             } else {
-                v = subs.length > 1 ? parseInt(subs[1].value) : NaN;
+                v = leaves.length > 1 ? parseInt(leaves[1]) : NaN;
             }
             if (this.weights === 'weighted') {
                 if (this.edgeListWeight) {
                     const val = this._resolveFieldValue(entry, this.edgeListWeight);
                     w = val !== undefined ? val : null;
                 } else {
-                    w = subs.length > 2 ? subs[2].value : null;
+                    const lv = leaves || this._collectLeafValues(entry);
+                    w = lv.length > 2 ? lv[2] : null;
                 }
             }
             if (!isNaN(u) && !isNaN(v)) {
@@ -638,7 +673,22 @@ class GraphVisualizer extends GraphBaseVisualizer {
                 edges.push({ from: u, to: v, weight: w });
             }
         }
-        const nodes = [...nodeSet].sort((a, b) => a - b).map(id => ({ id }));
+
+        // Determine node range:
+        //   nodeStart = this.base if explicitly set, else min(all u, all v)
+        //   nodeEnd   = this.limit if explicitly set, else max(all u, all v)
+        let minId = Infinity, maxId = -Infinity;
+        for (const id of nodeSet) {
+            if (id < minId) minId = id;
+            if (id > maxId) maxId = id;
+        }
+        if (nodeSet.size === 0) { minId = 0; maxId = -1; }
+
+        const nodeStart = this.base > 0 ? this.base : minId;
+        const nodeEnd   = this.limit !== null ? this.limit : maxId;
+
+        const nodes = [];
+        for (let i = nodeStart; i <= nodeEnd; i++) nodes.push({ id: i });
         return { nodes, edges };
     }
 
@@ -687,13 +737,23 @@ class GraphVisualizer extends GraphBaseVisualizer {
     // ── Format / direction auto-detection ─────────────────────────────────────
 
     _detectFormat(variable) {
-        // if (!variable || !variable.children || variable.children.length === 0) return 'adj_list';
         const ch = variable.children;
+        if (!ch || ch.length === 0) return 'edge_list';
         const hasGrand = ch.some(c => c.children && c.children.length > 0);
         if (!hasGrand) return 'next';
-        const outerLen = ch.length;
-        const allSquare = ch.every(c => c.children && c.children.length === outerLen);
-        return allSquare ? 'adj_matrix' : 'adj_list';
+
+        // Check if all children have the same number of sub-children
+        const firstLen = ch[0].children ? ch[0].children.length : 0;
+        const allSame = firstLen > 0 && ch.every(c => c.children && c.children.length === firstLen);
+
+        if (allSame) {
+            // Square (N×N) → adjacency matrix; otherwise → edge list
+            if (firstLen === ch.length) return 'adj_matrix';
+            return 'edge_list';
+        }
+
+        // Children have varying sub-child counts → adjacency list
+        return 'adj_list';
     }
 
     _detectDirected(edges) {
@@ -739,8 +799,19 @@ class GraphVisualizer extends GraphBaseVisualizer {
 
         if (this.format === 'next') {
             for (let i = start; i <= end; i++) {
-                const to = parseInt(ch[i].value);
-                if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight: null });
+                let to;
+                if (this.nextField) {
+                    const val = this._resolveFieldValue(ch[i], this.nextField);
+                    to = val !== undefined ? parseInt(val) : NaN;
+                } else {
+                    to = parseInt(ch[i].value);
+                }
+                let weight = null;
+                if (this.weightField) {
+                    const wv = this._resolveFieldValue(ch[i], this.weightField);
+                    weight = wv !== undefined ? wv : null;
+                }
+                if (!isNaN(to) && valid.has(to)) edges.push({ from: i, to, weight });
             }
         } else if (this.format === 'adj_list') {
             for (let i = start; i <= end; i++) {

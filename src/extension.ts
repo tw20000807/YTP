@@ -14,6 +14,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const folderUri = vscode.Uri.joinPath(workspaceFolders[0].uri, folderName);
 	const debugFileUri = vscode.Uri.joinPath(folderUri, 'debug_log.txt');
 
+	debugProxy.onDebuggerStart(async () => {
+		webviewManager.show({ scopes: [] });
+	});
 	debugProxy.onDidDataChanged(async (variables) => {
 		webviewManager.show(variables);
 		

@@ -5,18 +5,6 @@ int main(){
     cin.tie(0);
     ios_base::sync_with_stdio(0);
     //start here
-    // STL (from https://www.geeksforgeeks.org/cpp/list-cpp-stl/)
-    list<int> myList;
-    myList.push_back(10);
-    myList.push_back(20);
-    myList.push_front(5);
-
-    cout << "List elements: ";
-    for (int n : myList){
-        cout << n << " ";
-    }
-    cout << endl;
-    // structure
     struct Node{
         int data;
         Node* next;

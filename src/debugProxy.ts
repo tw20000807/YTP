@@ -37,10 +37,17 @@ export class DebuggerProxy implements vscode.Disposable {
 	private _end = new vscode.EventEmitter<void>();
 	readonly end = this._end.event;
 
+	private _onDebuggerStart = new vscode.EventEmitter<void>();
+	readonly onDebuggerStart = this._onDebuggerStart.event;
+
 	constructor() {
 		this.disposables.push(
 			this._onDidDataChanged,
-			vscode.debug.onDidStartDebugSession((s: vscode.DebugSession) => {this.activeSession = s;}),
+			this._onDebuggerStart,
+			vscode.debug.onDidStartDebugSession((s: vscode.DebugSession) => {
+				this.activeSession = s;
+				this._onDebuggerStart.fire();
+			}),
 			vscode.debug.onDidTerminateDebugSession((s: vscode.DebugSession) => {
 				if(this.activeSession?.id === s.id) {
 					this.activeSession = undefined;
@@ -79,7 +86,7 @@ export class DebuggerProxy implements vscode.Disposable {
 				if(scope.name === "Registers") return;
 				return {
 					scopeName: scope.name,
-					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0)
+					variables: await this.RecursivegetVariables({ variablesReference: scope.variablesReference }, 0, new Set<string>())
 				};
 			}));
 
@@ -113,22 +120,28 @@ export class DebuggerProxy implements vscode.Disposable {
 			return [];
 		}
 	}
-	public async RecursivegetVariables(args: { variablesReference: number }, dep: number): Promise<any> {
+	
+	public async RecursivegetVariables(args: { variablesReference: number }, dep: number, seen: Set<string>): Promise<any> {
 		// if (args.variablesReference === 0 || dep > 4) return [];
+	
 		if (args.variablesReference === 0) return [];
 		try {
 			const arr = await this.getVariables({variablesReference: args.variablesReference});
 			return await Promise.all(arr.map(async (v : Variable) => {
+				const evalName = v.evaluateName || v.name;
+				
 				const node: any = {
 					name: v.evaluateName ? v.evaluateName : v.name,
-					// name: v.evaluateName ? v.evaluateName.replace(/[()]/g, '') : v.name,
+					evaluateName: evalName,
 					value: v.value,
 					type: v.type,
 					memoryReference: v.memoryReference
 				};
 				if(v.value == "0x0") return node; // avoid infinite loop caused by null pointer
+				if (seen.has(evalName)) return node;
+				seen.add(evalName);
 				if (v.variablesReference > 0) {
-					node.children = await this.RecursivegetVariables({variablesReference: v.variablesReference}, dep + 1);
+					node.children = await this.RecursivegetVariables({variablesReference: v.variablesReference}, dep + 1, seen);
 				}
 				return node;
 			}));
