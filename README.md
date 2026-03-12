@@ -147,6 +147,5 @@ Binds two scalar variables (L and R) to highlight all elements within an index r
   - **Range** — Bracket type: `[l,r]`, `(l,r)`, `[l,r)`, or `(l,r]`. decided which
   - **Color** — Highlight color (default light blue `#4fc3f7`).
 
-## example:
-![graph with color modifier](image.png)
-![lined-list](image-1.png)
+## Credit
+this project is created by brinton, tw20000807, and chenbinghong, supported by young turing program.

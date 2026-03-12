@@ -7,6 +7,7 @@ int main(){
     int pointer = 3;
     int l = 1,r = 2;
     vector<string> data{"abc","def","ghi","ijk","jkl"};
+    vector<int> color{0,1,0,0,1};
     {
         // graph
         vector<vector<int>> adjcent_matrix(N,vector<int>(N,0));
