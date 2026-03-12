@@ -92,6 +92,7 @@ class BarVisualizer extends BaseVisualizer {
         pointInput.addEventListener('mousedown', e => e.stopPropagation());
         pointInput.addEventListener('change', e => {
             this.pointers[idx].name = e.target.value.trim();
+            this._syncPointersUI();
             this._render();
         });
 
