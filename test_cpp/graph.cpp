@@ -2,6 +2,7 @@
 #include<vector>
 using namespace std;
 
+#define ar3 array<int, 3>
 int main(){
     int N = 5;
     int pointer = 3;
@@ -15,7 +16,8 @@ int main(){
         vector<pair<int,int>> pair_next{{-1,-1},{0,1},
                                         {0,2},{1,1},{1,2}};
         vector<vector<pair<int,int>>> pair_list(N);
-        vector<array<int,3>> uvw {{1,2,1},{2,3,1},{1,4,2},{2,4,3}};
+
+        // vector<array<int,3>> uvw {ar3{1,2,1},ar3{2,3,1},ar3{1,4,2},ar3{2,4,3}};
         vector<int> next(N);
         // tree
         vector<int> p{-1,0,0,1,1};
