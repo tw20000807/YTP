@@ -132,7 +132,8 @@ class VisualizerManager {
         if (known) {
             if (x === null && known.x !== null) x = known.x;
             if (y === null && known.y !== null) y = known.y;
-            if (type === 'Text' && known.type && known.type !== 'Text') type = known.type;
+            // if (type === 'Text' && known.type && known.type !== 'Text') 
+            type = known.type;
         }
 
         if (x === null || y === null) {

@@ -33,12 +33,12 @@ int main(){
         {3,2,3},
         {2,3,4}
     };
-    vector<pair<int,int>> mst;
+    vector<array<int,3>> mst;
     Dsu dsu(N);
     sort(edges.begin(),edges.end());
     for(auto [w,u,v]:edges){
         if(dsu.merge(u,v)){
-            mst.push_back({u,v});
+            mst.push_back({u,v,w});
         }
     }
 

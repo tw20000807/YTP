@@ -544,8 +544,12 @@ class GraphVisualizer extends GraphBaseVisualizer {
     }
 
     _computeRawSnapshot(variable) {
-        if (!variable || !variable.children) return { nodes: [], edges: [] };
-
+        if (!variable || !variable.children) {
+            if (this.format === null || this.format === undefined) {
+                return this._parseEdgeListSnapshot([]);
+            }
+            return { nodes: [], edges: [] };
+        }
         let format = this.format;
         if (format === null || format === undefined) {
             format = this._detectFormat(variable);
@@ -604,7 +608,7 @@ class GraphVisualizer extends GraphBaseVisualizer {
                 }
             }
         } else if (format === 'edge_list') {
-            return this._parseEdgeListSnapshot(children, start, end);
+            return this._parseEdgeListSnapshot(children);
         } else {
             for (let i = start; i <= end; i++) {
                 const row = children[i].children || [];
@@ -638,7 +642,7 @@ class GraphVisualizer extends GraphBaseVisualizer {
     }
 
     /** Parse an edge-list array: each element is (u, v) or (u, v, w). */
-    _parseEdgeListSnapshot(children, start, end) {
+    _parseEdgeListSnapshot(children) {
         const nodeSet = new Set();
         const edges = [];
         for (let i = 0; i < children.length; i++) {
@@ -780,7 +784,16 @@ class GraphVisualizer extends GraphBaseVisualizer {
     // ── Parsing ───────────────────────────────────────────────────────────────
 
     _parseGraph() {
-        if (!this.variable || !this.variable.children) return { nodes: [], edges: [] };
+        // parse graph and _computeRawSnapshot are basicaaly the same and should combine.
+        if (!this.variable || !this.variable.children) {
+            if (this.format === null || this.format === undefined || this.format === 'edge_list') {
+                const result = this._parseEdgeListSnapshot([]);
+                // Add x, y to nodes for layout
+                result.nodes = result.nodes.map(n => ({ id: n.id, x: undefined, y: undefined }));
+                return result;
+            } 
+            return { nodes: [], edges: [] };
+        }
         const ch = this.variable.children;
         if (ch.length === 0) return { nodes: [], edges: [] };
         const start = Math.min(Math.max(0, this.base), ch.length - 1);
@@ -834,7 +847,7 @@ class GraphVisualizer extends GraphBaseVisualizer {
                 }
             }
         } else if (this.format === 'edge_list') {
-            const result = this._parseEdgeListSnapshot(ch, start, end);
+            const result = this._parseEdgeListSnapshot(ch);
             // Add x, y to nodes for layout
             result.nodes = result.nodes.map(n => ({ id: n.id, x: undefined, y: undefined }));
             return result;
@@ -1111,7 +1124,6 @@ class GraphVisualizer extends GraphBaseVisualizer {
             const isSelf     = edge.from === edge.to;
             const edgeIsNew = this._addedRawEdgeKeys.has(key);
             const revIsNew = this._addedRawEdgeKeys.has(reverseKey);
-
             // Layer layout: tree-edges (cross-layer) straight; same-layer edges curved.
             const useStraight = this.layout === 'layer' && this._edgeIsTreeEdge(edge);
 

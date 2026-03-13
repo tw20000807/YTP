@@ -879,10 +879,10 @@ body {
     stroke-width: 1.5px;
 }
 
-.viz-graph-node--new circle {
+/* .viz-graph-node--new circle {
     stroke: #b8860b;
     stroke-width: 1.5px;
-}
+} */
 
 .viz-graph-edge-label {
     fill: #a0c4e8;
