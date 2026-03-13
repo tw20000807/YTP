@@ -286,7 +286,7 @@ class MatrixVisualizer extends BaseVisualizer {
                 if (this._dynCellH) {
                     cell.style.height = `${this._dynCellH}px`;
                 }
-                if(matchedPointers.length > 0) console.log(matchedPointers, r, c);
+                // if(matchedPointers.length > 0) console.log(matchedPointers, r, c);
                 const indexEl = document.createElement('div');
                 indexEl.className = 'viz-matrix-index ' + (matchedPointers.length > 0 ? 'viz-matrix-index--pointer' : '');
                 indexEl.textContent = (matchedPointers.length > 0) ? matchedPointers.map(p => `(${p.rname},${p.cname})`).join(',') : `(${r},${c})`;

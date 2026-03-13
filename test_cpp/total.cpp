@@ -32,7 +32,16 @@ void bub_sort(vector< int > v){
         }
     }
 }
-
+void sel_sort(vector< int > v){
+    int n = v.size();
+    for(int i = 0; i < n; ++i){
+        int mn = i;
+        for(int j = i + 1; j < n; ++j){
+            if(v[mn] > v[j]) mn = j;
+        }
+        swap(v[i], v[mn]);
+    }
+}
 void i_sieve(int n){
     vector< int > not_prime(n + 1);
     for(int i = 2; i <= n; ++i){
@@ -75,7 +84,16 @@ void fsort(int l, int r, vector< int > &v){
     int mid = (l + r) >> 1;
     fsort(l, mid, v);
     fsort(mid + 1, r, v);
-    inplace_merge(v.begin() + l, v.begin() + mid + 1, v.begin() + r + 1);
+    vector< int > tmp(r - l + 1);
+    for(int k = 0, i = l, j = mid + 1; k < r - l + 1; ++k){
+        if(i > mid) tmp[k] = v[j++];
+        else if(j > r) tmp[k] = v[i++];
+        else if(v[i] > v[j]) tmp[k] = v[j++];
+        else tmp[k] = v[i++];
+    }
+    for(int i = l; i <= r; ++i){
+        v[i] = tmp[i - l];
+    }
     return;
 }
 int l_bound(int t, vector< int > v){
@@ -93,11 +111,13 @@ int l_bound(int t, vector< int > v){
 }
 int main(){
     // array_demo();
-    vector< int > v = {3, 0, 7, 5, 4, 1, 6, 9, 10, 4, 1, 5, 2, 8};
-    bub_sort(v);
+    vector< int > v = {15, 3, 11, 5, 14, 1, 9, 6, 16, 10, 12, 4, 7, 2, 13, 8};
+    // vector< int > u = {11, 6, 8, 3, 7, 12, 5, 9, 2, 10, 1, 4};
+    // bub_sort(v);
     // i_sieve(100);
-    // eulr_sieve(100);
-    // dp();
+    // eulr_sieve(50);
+    // sel_sort(v);
+    dp();
     // fsort(0, (int)v.size() - 1, v);
     // l_bound(5, v);
 }
