@@ -89,6 +89,7 @@ class MatrixVisualizer extends BaseVisualizer {
         addPtrBtn.addEventListener('click', () => {
             this.pointers.push({ rname: '', cname: '', rvalue: null, cvalue: null });
             this._syncPointersUI();
+            this._render();
         });
         ptrSection.appendChild(addPtrBtn);
         toolbar.appendChild(ptrSection);
