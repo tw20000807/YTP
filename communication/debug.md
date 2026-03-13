@@ -1,8 +1,0 @@
-1. when the graph is edge-list and it is empty, and if there's new edge, it doesn't rerender. it need to uncheck the box and recheck it inorder to be ok,  we should make it update once we recieve new data.
-result: you recheck the type when the graph is not empty, which is not what I want, remove it.Instead, the issue is even user  select  correct type(edge-list), it's not showing element.
-2. when we are typing in `viz-input` or `vis-ll-input`, the name shows `)` between the parent and child instead of `/`.(when the depth is small, it successfully shows `p1/child1`, but if the depth is more then two, it shows `p1/p2)child1`, instead we should show `p1/p2/child1`)
-result: you only check the first layer and hidden all layer!. instead the original approach is ok, but should only change the name. also the auto-complete is broken in data, and the pointer in linked-list is broken(basically all things broken). you should first retrieve everythings you do previously(your previous plan is in explain.md Bug 5)
-3. the range modifier need to be changed, instead of reading a pair<int,int>, it should read two integer(like pointer, but two(l and r pointer)).
-- result: you still only show one element:
-`<div class="viz-control"><span class="viz-ctrl-label">Var: </span><input type="text" class="viz-input" placeholder="variable" autocomplete="off"></div>`
-instead, you should have two place, one is l, and one is r instead of single Var:. and the range modifier highlight the range from l to r. also add a dropdown for user to choose if is `[l,r] or (l,r) or [l,r) or (l,r] `(whether include l or r, four option-dropdown).
