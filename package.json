@@ -2,7 +2,7 @@
   "name": "cpp-debugger",
   "displayName": "C++ Debug Visualizer",
   "description": "Fetch and show debug variables from C++ programs for competitive programming",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "publisher": "brinton",
   "repository": {
     "type": "git",
